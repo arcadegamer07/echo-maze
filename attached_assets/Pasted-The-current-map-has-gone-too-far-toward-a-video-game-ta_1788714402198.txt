@@ -1,0 +1,67 @@
+The current map has gone too far toward a video-game tactical HUD. Fix it.
+
+KEEP the existing global theme, background, colors, typography and overall application aesthetic exactly as they are.
+
+ONLY redesign the MAP visualization.
+
+The goal is:
+"professional autonomous structural inspection / engineering command interface with subtle military reconnaissance influence"
+
+NOT:
+"military video game minimap"
+
+Remove or greatly reduce the following:
+- WPT-01, WPT-02, WPT-03, WPT-04, WPT-05, WPT-06 waypoint labels
+- the large dashed waypoint route
+- the giant circular scan radius
+- the large orange directional arrow
+- the "TACTICAL LINK / STANDBY" floating box
+- the "HDG / TRK" floating HUD box
+- excessive random cyan and purple dots
+- excessive coordinate labels
+- decorative tactical graphics that do not represent actual data
+
+Keep the map clean and focused on the STRUCTURE being inspected.
+
+The map should primarily show:
+1. The actual occupancy/environment geometry.
+2. The current scan.
+3. The baseline/ghost scan.
+4. Structural differences.
+5. The rover position and heading.
+6. A subtle path showing where the rover has actually travelled.
+7. A restrained coordinate grid.
+8. A small, clean legend.
+
+Make the STRUCTURE the dominant visual element, not the HUD decorations.
+
+Use a restrained tactical engineering style:
+- thin grid lines
+- subtle coordinate markings around the edges
+- small sector labels only where useful
+- clean technical annotations
+- precise geometry
+- minimal overlays
+- compact status information
+
+The rover should be a small, clear top-down technical marker, not a giant icon.
+
+The rover's scan radius should be subtle or only appear during active scanning. Do not leave a huge circle permanently covering the map.
+
+If route information is shown, show only the actual rover trajectory as a thin line. Do not add artificial waypoint markers unless they exist in the actual data.
+
+Critical structural changes should be the most visually noticeable anomalies on the map.
+
+Make the map resemble:
+an engineering reconnaissance console used to inspect a structure
+
+rather than:
+a game HUD or military GPS screen.
+
+IMPORTANT:
+Do not change the rest of the application.
+Do not change the global theme.
+Do not add new features.
+Do not redesign the dashboard outside the map.
+
+Only clean up and refine the existing map visualization.
