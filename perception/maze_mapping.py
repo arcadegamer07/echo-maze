@@ -288,17 +288,17 @@ class MazeMap:
 if __name__ == "__main__":
     maze = MazeMap()
 
-    for i in range(3):
-        cell_x, cell_y, direction, wall, boundary_distance, cell = maze.process_scan(
-            100,
-            50,
-            0,
-            90,
-            20,
-            30
-        )
+    cell_x, cell_y, direction, wall, boundary_distance, cell = maze.process_scan(
+        100,   # robot x
+        50,    # robot y
+        0,     # robot heading
+        45,     # servo angle → East
+        20,    # sensor distance
+        30     # cell size
+    )
 
-        print(f"Scan {i + 1}:")
-        print("Cell:", cell_x, cell_y)
-        print("Wall:", wall)
-        print("Confidence:", cell)
+    print("Cell:", cell_x, cell_y)
+    print("Scan direction:", math.degrees(direction))
+    print("Wall:", wall)
+    print("Boundary distance:", boundary_distance)
+    print("Confidence:", cell)
