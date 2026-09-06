@@ -11,7 +11,7 @@ export class EchoMazeSocket {
     } catch { this.status = 'disconnected'; }
   }
   send(command: 'learn' | 'verify' | 'stop' | 'reset') {
-    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ cmd: command, source: 'cse-4-dashboard' }));
+    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ cmd: command, source: 'echo-maze-dashboard' }));
   }
   disconnect() { this.socket?.close(); }
 }

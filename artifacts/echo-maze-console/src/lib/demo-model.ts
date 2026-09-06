@@ -21,7 +21,7 @@ export const diffZones: DiffZone[] = [
 ];
 export const runMetadata: RunMetadata = {
   id: 'EM-0427-VR', mode: 'VERIFY / DEMO DATA', startedAt: '14:32:08 UTC',
-  route: 'CSE-4 / MAZE-ALPHA', points: 1842, confidence: 96.2,
+  route: 'MAZE-ALPHA / BASELINE', points: 1842, confidence: 96.2,
 };
 export function makeGrid(columns = 16, rows = 10, phase = 0): number[] {
   return Array.from({ length: columns * rows }, (_, index) => {
