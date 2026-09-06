@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Echo-Maze telemetry packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "timestamp", "mode", "source", "motor", "scan", "imu", "ir", "temp_c"],
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1},
+    "timestamp": {"type": "number", "minimum": 0},
+    "mode": {"type": "string", "enum": ["test", "learn", "verify"]},
+    "source": {"type": "string", "enum": ["fixture", "live"]},
+    "motor": {"type": "object", "additionalProperties": false, "required": ["left_speed", "right_speed", "duration_ms"], "properties": {"left_speed": {"type": "number"}, "right_speed": {"type": "number"}, "duration_ms": {"type": "number", "minimum": 0}}},
+    "scan": {"type": "object", "additionalProperties": false, "required": ["angle", "distance_cm"], "properties": {"angle": {"type": "number", "minimum": 0, "maximum": 180}, "distance_cm": {"type": ["number", "null"], "minimum": 0}}},
+    "imu": {"oneOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["accel", "gyro"], "properties": {"accel": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}, "gyro": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}}}]},
+    "ir": {"type": ["number", "null"]},
+    "temp_c": {"type": ["number", "null"]}
+  },
+  "allOf": [
+    {"if": {"properties": {"mode": {"const": "test"}}}, "then": {"properties": {"source": {"const": "fixture"}}}},
+    {"if": {"properties": {"mode": {"enum": ["learn", "verify"]}}}, "then": {"properties": {"source": {"const": "live"}, "imu": {"type": "object"}}}}
+  ]
+}

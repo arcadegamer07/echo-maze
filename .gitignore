@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
 # compiled output
@@ -47,3 +48,13 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+=======
+.venv/
+__pycache__/
+*.py[cod]
+data/runs/*.jsonl
+data/runs/*.csv
+data/baseline/*.joblib
+data/baseline/*.json
+
+>>>>>>> 666140a1ec15a30bf81cfd080b3ae2120735972c
