@@ -1,5 +1,8 @@
-.pio/
-.vscode/
-.DS_Store
-Thumbs.db
-*.log
+.venv/
+__pycache__/
+*.py[cod]
+data/runs/*.jsonl
+data/runs/*.csv
+data/baseline/*.joblib
+data/baseline/*.json
+
