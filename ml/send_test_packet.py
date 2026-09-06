@@ -17,10 +17,11 @@ def test_packet(run_id: str) -> dict:
     return {
         "run_id": run_id,
         "timestamp": 1000,
-        "mode": "learn",
+        "mode": "test",
+        "source": "fixture",
         "motor": {"left_speed": 0, "right_speed": 0, "duration_ms": 0},
         "scan": {"angle": 90, "distance_cm": 42.5},
-        "imu": {"accel": [0.0, 0.0, 9.81], "gyro": [0.0, 0.0, 0.0]},
+        "imu": None,
         "ir": None,
         "temp_c": 25.0,
     }
