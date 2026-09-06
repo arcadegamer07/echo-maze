@@ -1,0 +1,5 @@
+# Runtime dependencies for the laptop-side Echo-Maze pipeline.
+websockets>=15.0
+jsonschema>=4.0
+numpy>=2.0
+scikit-learn>=1.5
