@@ -15,6 +15,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 from websockets.asyncio.server import ServerConnection, serve
+from websockets.exceptions import ConnectionClosed
 
 
 SCHEMA_PATH = Path(__file__).parent / "schemas" / "telemetry.schema.json"
@@ -41,32 +42,38 @@ async def handle_connection(
 ) -> None:
     remote = websocket.remote_address
     sender_ip = remote[0] if remote else "unknown"
-    async for raw_message in websocket:
-        try:
-            packet: dict[str, Any] = json.loads(raw_message)
-            if not isinstance(packet, dict):
-                raise ValueError("packet must be a JSON object")
-        except (json.JSONDecodeError, ValueError) as error:
-            await websocket.send(json.dumps({"ok": False, "error": str(error)}))
-            print(f"Dropped malformed packet from {sender_ip}: {error}")
-            continue
+    try:
+        async for raw_message in websocket:
+            try:
+                packet: dict[str, Any] = json.loads(raw_message)
+                if not isinstance(packet, dict):
+                    raise ValueError("packet must be a JSON object")
+            except (json.JSONDecodeError, ValueError) as error:
+                await websocket.send(json.dumps({"ok": False, "error": str(error)}))
+                print(f"Dropped malformed packet from {sender_ip}: {error}")
+                continue
 
-        errors = sorted(validator.iter_errors(packet), key=lambda error: list(error.path))
-        if errors:
-            message = errors[0].message
-            await websocket.send(json.dumps({"ok": False, "error": message}))
-            print(f"Dropped invalid packet from {sender_ip}: {message}")
-            continue
+            errors = sorted(validator.iter_errors(packet), key=lambda error: list(error.path))
+            if errors:
+                message = errors[0].message
+                await websocket.send(json.dumps({"ok": False, "error": message}))
+                print(f"Dropped invalid packet from {sender_ip}: {message}")
+                continue
 
-        packet["received_at_utc"] = utc_now()
-        packet["sender_ip"] = sender_ip
-        destination = log_path(output_dir, packet["run_id"])
-        with destination.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(packet, separators=(",", ":")) + "\n")
-        await websocket.send(json.dumps({"ok": True, "run_id": packet["run_id"]}))
+            packet["received_at_utc"] = utc_now()
+            packet["sender_ip"] = sender_ip
+            destination = log_path(output_dir, packet["run_id"])
+            with destination.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(packet, separators=(",", ":")) + "\n")
+            await websocket.send(json.dumps({"ok": True, "run_id": packet["run_id"]}))
+            print(
+                f"[{packet['mode']}] {packet['run_id']} t={packet['timestamp']} "
+                f"from {sender_ip} -> {destination.name}"
+            )
+    except ConnectionClosed as error:
         print(
-            f"[{packet['mode']}] {packet['run_id']} t={packet['timestamp']} "
-            f"from {sender_ip} -> {destination.name}"
+            f"Connection from {sender_ip} closed before a complete WebSocket close "
+            f"(code={error.code}). Server is still listening."
         )
 
 
