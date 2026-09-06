@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
 # compiled output
@@ -48,13 +47,18 @@ Thumbs.db
 # Replit
 .cache/
 .local/
-=======
+
+# Python
 .venv/
 __pycache__/
 *.py[cod]
+
+# Generated telemetry data
 data/runs/*.jsonl
 data/runs/*.csv
 data/baseline/*.joblib
 data/baseline/*.json
 
->>>>>>> 666140a1ec15a30bf81cfd080b3ae2120735972c
+# Local firmware credentials and PlatformIO build output
+firmware/secrets.h
+.pio/
