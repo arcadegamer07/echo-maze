@@ -5,4 +5,5 @@ data/runs/*.jsonl
 data/runs/*.csv
 data/baseline/*.joblib
 data/baseline/*.json
-
+.pio/
+.vscode/
