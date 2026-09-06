@@ -25,6 +25,8 @@ function MapGrid({ mode = 'occupancy', interpolation = 0.72, compact = false, gh
   const [focused, setFocused] = useState<number | null>(null);
   const cells = mode === 'diff' ? diffGrid : currentGrid.map((value, i) => baselineGrid[i] * (1 - interpolation) + value * interpolation);
   const scanning = state === 'LEARNING' || state === 'VERIFYING';
+  const roverX = (pose.x / 5) * 160;
+  const roverY = (pose.y / 2.4) * 100;
   const focusedX = focused === null ? null : focused % 16; const focusedY = focused === null ? null : Math.floor(focused / 16);
   const focusedSector = focusedX === null || focusedY === null ? null : `${String.fromCharCode(65 + Math.floor(focusedX / 4))}${Math.floor(focusedY / 2) + 1}`;
   const renderCells = (values: number[], layer: string) => <div className={`map-grid ${layer}`} role="grid" aria-label={`${mode} map`}>
@@ -43,9 +45,9 @@ function MapGrid({ mode = 'occupancy', interpolation = 0.72, compact = false, gh
       <text className="sector-label" x="19" y="16">A1</text>
       <text className="sector-label" x="116" y="82">B3</text>
       <g className={`scan-layer ${scanning ? 'is-scanning' : ''}`}>{scanning && <><circle className="scan-radius" cx="91" cy="59" r="17" /><path className="scan-sweep" d="M91 59 L107 59 A16 16 0 0 0 99 45 Z" /></>}</g>
-      <g className="crosshair" transform="translate(91 59)"><circle r="3.5" /><path d="M-7 0H-4 M4 0H7 M0-7V-4 M0 4V7" /></g>
+      <g className="crosshair" transform={`translate(${roverX} ${roverY})`}><circle r="3.5" /><path d="M-7 0H-4 M4 0H7 M0-7V-4 M0 4V7" /></g>
       {(mode === 'diff' || state === 'VERIFYING') && <g className="anomaly-layer"><rect x="111" y="28" width="13" height="31" /><rect x="70" y="48" width="20" height="9" /><text x="125" y="27">ZONE B3</text><text x="71" y="46">ZONE C1</text></g>}
-      <g className="overlay-rover" transform="translate(91 59) rotate(18)"><path className="rover-heading" d="M0-10 L-2.5-5 L2.5-5 Z" /><rect x="-3" y="-3" width="6" height="6" /><path d="M-5 0H5 M0-5V5" /></g>
+      <g className="overlay-rover" transform={`translate(${roverX} ${roverY}) rotate(${pose.heading})`}><image className="rover-image" href="/rover-marker.png" x="-4.5" y="-6.5" width="9" height="12.85" preserveAspectRatio="xMidYMid meet" /></g>
     </svg>
     {mode === 'occupancy' && <>{focusedSector && focusedX !== null && focusedY !== null && <div className="map-readout"><strong>{focusedSector}</strong><span>GRID X{String(focusedX).padStart(2, '0')} / Y{String(focusedY).padStart(2, '0')}</span><span>OCCUPANCY {Math.round(cells[focused!] * 100)}%</span></div>}<div className="map-legend"><span><i className="legend-swatch" style={{ background: '#3fd4ec' }} />current</span><span><i className="legend-swatch legend-ghost" />baseline</span><span><i className="legend-swatch legend-rover" />rover</span><span><i className="legend-swatch legend-critical" />change</span></div></>}
     {mode === 'diff' && <div className="map-legend"><span><i className="legend-swatch" style={{ background: '#3fd4ec' }} />current</span><span><i className="legend-swatch legend-ghost" />baseline</span><span><i className="legend-swatch legend-critical" />change</span></div>}
