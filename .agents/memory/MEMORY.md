@@ -1,0 +1,1 @@
+- [Preview-ready handoff](preview-handoff.md) — uploaded app work stays temporary until moved into a registered web artifact with a managed workflow.

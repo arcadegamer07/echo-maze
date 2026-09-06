@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Echo Maze Tactical Console"
+description = "A dark reconnaissance command console for running Learn and Verify missions, inspecting rover telemetry, comparing structural maps, and reviewing anomaly evidence."
+version = "1.0.0"
+id = "artifacts/echo-maze-console"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19574
+
+[services.development]
+run = "pnpm --filter @workspace/echo-maze-console run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/echo-maze-console", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/echo-maze-console/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19574"
+BASE_PATH = "/"

@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "d8zs9Q28omyKIqIX6V--8"
+uri = "file://echo-maze-tactical-tactical.zip"
+type = "unspecified"
+title = "Echo Maze tactical map update"
+description = "Updated Next.js project with a military reconnaissance map overlay, tactical coordinates, sector labels, rover heading and route, scan radius/sweep, baseline/current layers, anomaly zones, legends, and hover readouts."
+logical_id = "bc49ccec-9036-4b01-925a-5afa61f97543"
+content_hash = "sha256:519b005d725bd997cd5e699e31b6ec04a0d25216276d1fa51e091c227509987c"
+size = 73872
+mtime_ms = 1788713792733
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/conversation:b19289e3-1ae9-4ec8-a517-a3fded6998fb/bc49ccec-9036-4b01-925a-5afa61f97543/073713f2-0aa0-4044-ba8c-ded4bc83bb76"
+storage_version_token = "1788713799273473"
+content_type = "application/octet-stream"

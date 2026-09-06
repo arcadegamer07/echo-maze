@@ -1,0 +1,78 @@
+MAP VISUAL DIRECTION — IMPORTANT:
+
+Make the map feel like a MILITARY TACTICAL RECONNAISSANCE / COMMAND-CONSOLE MAP while keeping the application's existing theme, background, colors and overall aesthetic unchanged.
+
+The map should look like something used to monitor an autonomous reconnaissance rover inside an unknown structure.
+
+Use visual language inspired by:
+- military tactical maps
+- reconnaissance HUDs
+- command-and-control interfaces
+- radar/navigation systems
+- drone/UGV mission displays
+- tactical GPS mapping
+
+The map should include:
+
+- A precise tactical coordinate grid
+- X/Y coordinate markings around the map edges
+- Small sector labels such as A1, A2, B1, B2, etc.
+- Subtle crosshair/reference markers
+- Rover position marker with a clear directional heading
+- A small heading/trajectory indicator
+- Waypoints or route markers
+- A subtle path showing where the rover has travelled
+- Scan-radius visualization around the rover
+- Subtle radar/sweep-style scanning indication during Learn and Verify
+- Baseline/reference geometry shown as a tactical ghost layer
+- Current detected geometry shown as the active layer
+- Structural changes highlighted as tactical anomaly zones
+- Small labels for detected critical zones
+- Coordinate readouts when hovering/selecting map regions
+- A compact LEGEND explaining:
+  CURRENT
+  BASELINE
+  CHANGE
+  ROVER
+  CRITICAL ZONE
+  UNKNOWN
+
+Make the map feel spatially accurate and information-dense.
+
+Use thin technical lines, restrained markers and precise geometry.
+
+Avoid:
+- cartoon map graphics
+- Google Maps styling
+- ordinary dashboard charts
+- excessive neon
+- giant icons
+- decorative sci-fi effects
+- unnecessary 3D terrain
+- gaming-style UI
+- random glowing elements
+
+The map should communicate:
+"TACTICAL RECONNAISSANCE OF AN UNKNOWN STRUCTURE"
+
+rather than:
+"generic website with a map."
+
+During LEARN:
+- show the rover scanning the environment
+- show a subtle expanding scan radius/sweep
+- progressively reveal the environment being mapped
+- indicate SCANNING / MAPPING status
+
+During VERIFY:
+- show the same tactical map
+- indicate the verification route
+- show the baseline as a reference layer
+- progressively reveal detected differences
+- highlight changed areas as anomaly zones
+- display small zone labels such as ZONE B3 / ZONE C1
+
+Keep all of this integrated into the existing map component and existing data.
+
+Do not change the application's existing global theme or background.
+Only enhance the MAP's visual language and interactions.
