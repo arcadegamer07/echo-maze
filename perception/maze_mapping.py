@@ -86,6 +86,7 @@ def find_boundary_hit(x, y, direction, sensor_distance, cell_size):
 
 def create_cell():
     return {
+        "occupancy": 0.5,
         "N": 0.5,
         "E": 0.5,
         "S": 0.5,
