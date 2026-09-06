@@ -1,0 +1,56 @@
+Fix ONLY the rover visualization on the map.
+
+DO NOT change the existing theme, background, colors, map design, grid, typography, or overall aesthetic.
+
+1. REMOVE THE ROVER TRAIL COMPLETELY.
+- No curved path.
+- No historical trajectory.
+- No line behind the rover.
+- Do not render any route/trail unless explicitly required by actual data.
+- The map should show ONLY the rover's current position.
+
+2. FIX THE ROVER POSITION.
+The rover is currently visually floating/misaligned with the actual map structure.
+
+The rover marker MUST be positioned using the existing rover pose coordinates:
+- x
+- y
+- heading
+
+Do NOT position it using arbitrary CSS percentages such as `left: 48%; top: 47%`.
+
+Convert the rover's real map coordinates into the exact same coordinate system used by the occupancy grid/map.
+
+The rover must sit ON the map at the correct physical location corresponding to its x/y pose.
+
+3. FIX COORDINATE TRANSFORMATION.
+- Determine the map's actual world-coordinate bounds.
+- Determine the map's rendered pixel dimensions.
+- Convert world X/Y → map pixel X/Y consistently.
+- Account for the map's Y-axis direction if necessary.
+- Ensure the rover remains correctly positioned when the map is resized.
+
+4. ROVER APPEARANCE.
+Keep the existing rover graphic, but make it smaller and more naturally integrated into the map.
+
+It should look like a small top-down inspection rover marker, not a giant game character.
+
+5. HEADING.
+Rotate the rover according to the existing heading/yaw value.
+The rotation must be around the center of the rover marker.
+
+6. IMPORTANT:
+The rover should represent ONLY its CURRENT position.
+Do not show where it has previously been.
+
+7. DEMO MODE:
+If demo pose data changes, the rover should update its position accordingly.
+Do not add a trail.
+
+Before changing code, inspect the existing MapGrid implementation and identify how the map coordinates are currently represented.
+
+Reuse the existing coordinate/data model instead of creating a separate coordinate system.
+
+Do not modify anything outside the rover visualization unless required to fix its coordinate placement.
+
+After implementing, run the app and verify that the rover is correctly aligned with the map.

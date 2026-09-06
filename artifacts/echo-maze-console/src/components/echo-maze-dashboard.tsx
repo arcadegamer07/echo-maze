@@ -23,11 +23,13 @@ function Panel({ title, code, children, className = '' }: { title: string; code?
 
 function MapGrid({ mode = 'occupancy', interpolation = 0.72, compact = false, ghost = false, state = 'IDLE' }: { mode?: 'occupancy' | 'diff'; interpolation?: number; compact?: boolean; ghost?: boolean; state?: RunState }) {
   const [focused, setFocused] = useState<number | null>(null);
+  const columns = 16;
+  const rows = 10;
   const cells = mode === 'diff' ? diffGrid : currentGrid.map((value, i) => baselineGrid[i] * (1 - interpolation) + value * interpolation);
   const scanning = state === 'LEARNING' || state === 'VERIFYING';
-  const roverX = (pose.x / 5) * 160;
-  const roverY = (pose.y / 2.4) * 100;
-  const focusedX = focused === null ? null : focused % 16; const focusedY = focused === null ? null : Math.floor(focused / 16);
+  const roverX = (pose.x / columns) * 160;
+  const roverY = (pose.y / rows) * 100;
+  const focusedX = focused === null ? null : focused % columns; const focusedY = focused === null ? null : Math.floor(focused / columns);
   const focusedSector = focusedX === null || focusedY === null ? null : `${String.fromCharCode(65 + Math.floor(focusedX / 4))}${Math.floor(focusedY / 2) + 1}`;
   const renderCells = (values: number[], layer: string) => <div className={`map-grid ${layer}`} role="grid" aria-label={`${mode} map`}>
     {values.map((value, index) => {
@@ -41,10 +43,9 @@ function MapGrid({ mode = 'occupancy', interpolation = 0.72, compact = false, gh
     <div className="map-axis map-axis-top" aria-hidden="true">{Array.from({ length: 5 }, (_, i) => <span key={i}>X{String(i * 4).padStart(2, '0')}</span>)}</div>
     <div className="map-axis map-axis-left" aria-hidden="true">{Array.from({ length: 3 }, (_, i) => <span key={i}>Y{String(i * 4).padStart(2, '0')}</span>)}</div>
     <svg className="tactical-overlay" viewBox="0 0 160 100" preserveAspectRatio="none" aria-label="Tactical reconnaissance overlay">
-      <path className="route-path" d="M16 81 C28 75 28 63 43 63 S57 81 71 72 S81 48 91 59 S110 46 124 30 S137 24 146 17" />
       <text className="sector-label" x="19" y="16">A1</text>
       <text className="sector-label" x="116" y="82">B3</text>
-      <g className={`scan-layer ${scanning ? 'is-scanning' : ''}`}>{scanning && <><circle className="scan-radius" cx="91" cy="59" r="17" /><path className="scan-sweep" d="M91 59 L107 59 A16 16 0 0 0 99 45 Z" /></>}</g>
+      <g className={`scan-layer ${scanning ? 'is-scanning' : ''}`} transform={`translate(${roverX} ${roverY})`}>{scanning && <><circle className="scan-radius" cx="0" cy="0" r="17" /><path className="scan-sweep" d="M0 0 L17 0 A17 17 0 0 0 8.5 -14.5 Z" /></>}</g>
       <g className="crosshair" transform={`translate(${roverX} ${roverY})`}><circle r="3.5" /><path d="M-7 0H-4 M4 0H7 M0-7V-4 M0 4V7" /></g>
       {(mode === 'diff' || state === 'VERIFYING') && <g className="anomaly-layer"><rect x="111" y="28" width="13" height="31" /><rect x="70" y="48" width="20" height="9" /><text x="125" y="27">ZONE B3</text><text x="71" y="46">ZONE C1</text></g>}
       <g className="overlay-rover" transform={`translate(${roverX} ${roverY}) rotate(${pose.heading})`}><image className="rover-image" href="/rover-marker.png" x="-4.5" y="-6.5" width="9" height="12.85" preserveAspectRatio="xMidYMid meet" /></g>
