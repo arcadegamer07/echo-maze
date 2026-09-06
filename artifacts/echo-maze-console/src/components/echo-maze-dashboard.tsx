@@ -36,22 +36,19 @@ function MapGrid({ mode = 'occupancy', interpolation = 0.72, compact = false, gh
   </div>;
   return <div className={`map-shell ${compact ? 'compact-map' : ''}`}>
     {ghost && mode === 'occupancy' && renderCells(baselineGrid, 'ghost-layer')}{renderCells(cells, 'live-layer')}
-    <div className="map-axis map-axis-top" aria-hidden="true">{Array.from({ length: 8 }, (_, i) => <span key={i}>X{String(i * 2).padStart(2, '0')}</span>)}</div>
-    <div className="map-axis map-axis-bottom" aria-hidden="true">{Array.from({ length: 8 }, (_, i) => <span key={i}>X{String(i * 2).padStart(2, '0')}</span>)}</div>
-    <div className="map-axis map-axis-left" aria-hidden="true">{Array.from({ length: 5 }, (_, i) => <span key={i}>Y{String(i * 2).padStart(2, '0')}</span>)}</div>
-    <div className="map-axis map-axis-right" aria-hidden="true">{Array.from({ length: 5 }, (_, i) => <span key={i}>Y{String(i * 2).padStart(2, '0')}</span>)}</div>
+    <div className="map-axis map-axis-top" aria-hidden="true">{Array.from({ length: 5 }, (_, i) => <span key={i}>X{String(i * 4).padStart(2, '0')}</span>)}</div>
+    <div className="map-axis map-axis-left" aria-hidden="true">{Array.from({ length: 3 }, (_, i) => <span key={i}>Y{String(i * 4).padStart(2, '0')}</span>)}</div>
     <svg className="tactical-overlay" viewBox="0 0 160 100" preserveAspectRatio="none" aria-label="Tactical reconnaissance overlay">
       <path className="route-path" d="M16 81 C28 75 28 63 43 63 S57 81 71 72 S81 48 91 59 S110 46 124 30 S137 24 146 17" />
-      {[{ x: 16, y: 81 }, { x: 43, y: 63 }, { x: 71, y: 72 }, { x: 91, y: 59 }, { x: 124, y: 30 }, { x: 146, y: 17 }].map((point, index) => <g className={`waypoint waypoint-${index}`} key={`${point.x}-${point.y}`}><circle cx={point.x} cy={point.y} r="2.1" /><text x={point.x + 3} y={point.y - 3}>WPT-{String(index + 1).padStart(2, '0')}</text></g>)}
-      {['A1', 'B2', 'C3', 'D4'].map((label, index) => <text className="sector-label" x={22 + index * 38} y={16 + (index % 2) * 70} key={label}>{label}</text>)}
-      <g className={`scan-layer ${scanning ? 'is-scanning' : ''}`}><circle className="scan-radius" cx="91" cy="59" r="23" /><path className="scan-sweep" d="M91 59 L113 59 A22 22 0 0 0 102 40 Z" /></g>
-      <g className="crosshair" transform="translate(91 59)"><circle r="5.5" /><path d="M-10 0H-6 M6 0H10 M0-10V-6 M0 6V10" /></g>
+      <text className="sector-label" x="19" y="16">A1</text>
+      <text className="sector-label" x="116" y="82">B3</text>
+      <g className={`scan-layer ${scanning ? 'is-scanning' : ''}`}>{scanning && <><circle className="scan-radius" cx="91" cy="59" r="17" /><path className="scan-sweep" d="M91 59 L107 59 A16 16 0 0 0 99 45 Z" /></>}</g>
+      <g className="crosshair" transform="translate(91 59)"><circle r="3.5" /><path d="M-7 0H-4 M4 0H7 M0-7V-4 M0 4V7" /></g>
       {(mode === 'diff' || state === 'VERIFYING') && <g className="anomaly-layer"><rect x="111" y="28" width="13" height="31" /><rect x="70" y="48" width="20" height="9" /><text x="125" y="27">ZONE B3</text><text x="71" y="46">ZONE C1</text></g>}
-      <g className="overlay-rover" transform="translate(91 59) rotate(18)"><path className="rover-heading" d="M0-19 L-4-10 L4-10 Z" /><rect x="-4.5" y="-4.5" width="9" height="9" /><path d="M-7 0H7 M0-7V7" /></g>
+      <g className="overlay-rover" transform="translate(91 59) rotate(18)"><path className="rover-heading" d="M0-10 L-2.5-5 L2.5-5 Z" /><rect x="-3" y="-3" width="6" height="6" /><path d="M-5 0H5 M0-5V5" /></g>
     </svg>
-    {mode === 'occupancy' && <svg className="point-cloud" viewBox="0 0 160 100" aria-label="registered point cloud">{Array.from({ length: 38 }, (_, index) => <circle key={index} cx={((index * 37) % 150) + 5} cy={((index * 53) % 88) + 6} r={index % 6 === 0 ? 1.1 : .65} fill={index % 5 === 0 ? '#cbb8ff' : '#7fe9f6'} opacity={index % 5 === 0 ? .95 : .7} />)}</svg>}
-    {mode === 'occupancy' && <><div className={`map-status ${scanning ? 'active' : ''}`}><span className="status-marker" />{state === 'LEARNING' ? 'SCANNING / MAPPING' : state === 'VERIFYING' ? 'VERIFY ROUTE ACTIVE' : 'TACTICAL LINK / STANDBY'}</div><div className="heading-readout">HDG 018° · TRK 1.2 M/S</div>{focusedSector && focusedX !== null && focusedY !== null && <div className="map-readout"><strong>{focusedSector}</strong><span>GRID X{String(focusedX).padStart(2, '0')} / Y{String(focusedY).padStart(2, '0')}</span><span>OCCUPANCY {Math.round(cells[focused!] * 100)}%</span></div>}<div className="map-legend"><span><i className="legend-swatch" style={{ background: '#3fd4ec' }} />current</span><span><i className="legend-swatch legend-ghost" />baseline</span><span><i className="legend-swatch legend-rover" />rover</span><span><i className="legend-swatch legend-critical" />critical zone</span><span><i className="legend-swatch legend-unknown" />unknown</span></div></>}
-    {mode === 'diff' && <div className="map-legend"><span><i className="legend-swatch" style={{ background: '#3fd4ec' }} />current</span><span><i className="legend-swatch legend-ghost" />baseline</span><span><i className="legend-swatch legend-critical" />change</span><span><i className="legend-swatch legend-unknown" />unknown</span></div>}
+    {mode === 'occupancy' && <>{focusedSector && focusedX !== null && focusedY !== null && <div className="map-readout"><strong>{focusedSector}</strong><span>GRID X{String(focusedX).padStart(2, '0')} / Y{String(focusedY).padStart(2, '0')}</span><span>OCCUPANCY {Math.round(cells[focused!] * 100)}%</span></div>}<div className="map-legend"><span><i className="legend-swatch" style={{ background: '#3fd4ec' }} />current</span><span><i className="legend-swatch legend-ghost" />baseline</span><span><i className="legend-swatch legend-rover" />rover</span><span><i className="legend-swatch legend-critical" />change</span></div></>}
+    {mode === 'diff' && <div className="map-legend"><span><i className="legend-swatch" style={{ background: '#3fd4ec' }} />current</span><span><i className="legend-swatch legend-ghost" />baseline</span><span><i className="legend-swatch legend-critical" />change</span></div>}
   </div>;
 }
 
