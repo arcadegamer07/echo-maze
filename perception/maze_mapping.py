@@ -63,17 +63,53 @@ def update_wall_probability(cell, wall, wall_detected):
     cell[wall] = round(cell[wall], 2)
     return cell
 
-if __name__ == "__main__":
+def bayesian_update(prior, observation, p_detection_given_wall=0.9,
+                    p_detection_given_no_wall=0.1):
+    if observation:
+        likelihood_wall = p_detection_given_wall
+        likelihood_no_wall = p_detection_given_no_wall
+    else:
+        likelihood_wall = 1 - p_detection_given_wall
+        likelihood_no_wall = 1 - p_detection_given_no_wall
+
+    numerator = likelihood_wall * prior
+
+    denominator = (
+        likelihood_wall * prior
+        + likelihood_no_wall * (1 - prior)
+    )
+
+    return numerator / denominator
+
+def update_cell_bayesian(cell, wall, observation):
+    cell[wall] = bayesian_update(cell[wall], observation)
+    return cell
+
+def process_observation(x, y, cell_size, tolerance, observation):
+    cell_x, cell_y = world_to_cell(x, y, cell_size)
+
+    wall = detect_wall(
+        x, y,
+        cell_x, cell_y,
+        cell_size,
+        tolerance
+    )
+
     cell = create_cell()
 
-    print("Initial:", cell)
+    if wall is not None:
+        update_cell_bayesian(cell, wall, observation)
 
-    for i in range(5):
-        update_wall_probability(cell, "E", True)
+    return cell_x, cell_y, wall, cell
 
-    print("After 5 wall detections:", cell)
+if __name__ == "__main__":
+    cell_x, cell_y, wall, cell = process_observation(
+        58, 75,
+        30,
+        3,
+        True
+    )
 
-    for i in range(3):
-        update_wall_probability(cell, "E", False)
-
-    print("After 3 no-wall observations:", cell)
+    print("Cell:", cell_x, cell_y)
+    print("Wall:", wall)
+    print("Confidence:", cell)
