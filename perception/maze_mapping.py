@@ -84,6 +84,34 @@ def find_boundary_hit(x, y, direction, sensor_distance, cell_size):
 
     return wall, distance
 
+def cells_along_ray(x, y, direction, distance_cm, cell_size):
+    cells = []
+    step = cell_size / 10
+
+    distance = 0.0
+
+    while distance < distance_cm:
+        point_x = x + distance * math.cos(direction)
+        point_y = y + distance * math.sin(direction)
+
+        cell = world_to_cell(point_x, point_y, cell_size)
+
+        if cell not in cells:
+            cells.append(cell)
+
+        distance += step
+
+    # Always include the exact sensor endpoint
+    point_x = x + distance_cm * math.cos(direction)
+    point_y = y + distance_cm * math.sin(direction)
+
+    cell = world_to_cell(point_x, point_y, cell_size)
+
+    if cell not in cells:
+        cells.append(cell)
+
+    return cells
+
 def create_cell():
     return {
         "occupancy": 0.5,
@@ -92,6 +120,20 @@ def create_cell():
         "S": 0.5,
         "W": 0.5
     }
+
+def update_occupancy(cell, occupied):
+    if occupied:
+        cell["occupancy"] = bayesian_update(
+            cell["occupancy"],
+            True
+        )
+    else:
+        cell["occupancy"] = bayesian_update(
+            cell["occupancy"],
+            False
+        )
+
+    return cell
 
 def bayesian_update(prior, observation, p_detection_given_wall=0.9,
                     p_detection_given_no_wall=0.1):
@@ -170,3 +212,12 @@ if __name__ == "__main__":
     print("Wall:", wall)
     print("Boundary distance:", boundary_distance)
     print("Confidence:", cell)
+    ray_cells = cells_along_ray(
+        100,
+        50,
+        math.radians(45),
+        20,
+        30
+    )
+
+    print("Ray cells:", ray_cells)
