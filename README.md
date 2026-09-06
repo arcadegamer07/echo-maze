@@ -22,3 +22,9 @@ data/runs/      immutable raw JSONL telemetry logs
 The firmware connects to `ws://<laptop-ip>:8765`. The exact packet contract is
 in `telemetry_contract.md`. Do not start the anomaly model until raw packets
 are reliably being logged.
+
+Before hardware is ready, confirm the receiver using a simulated rover packet:
+
+```powershell
+.\\.venv\\Scripts\\python.exe -m ml.send_test_packet
+```

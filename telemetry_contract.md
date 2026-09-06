@@ -7,13 +7,19 @@ one UTF-8 JSON object per WebSocket message at approximately 10 Hz. The laptop
 does not send control commands in this first milestone; it replies only with a
 small acknowledgement after accepting or rejecting a message.
 
+Use `mode: "test"` with `source: "fixture"` for connectivity checks before
+all sensors are wired. Test packets are never used to build a baseline, map,
+or ML model. Use `mode: "learn"` or `mode: "verify"` only for real rover
+readings, with `source: "live"`.
+
 ## Canonical packet
 
 ```json
 {
-  "run_id": "baseline-01",
+  "run_id": "connectivity-test-01",
   "timestamp": 23843,
-  "mode": "learn",
+  "mode": "test",
+  "source": "fixture",
   "motor": {"left_speed": 120, "right_speed": 120, "duration_ms": 500},
   "scan": {"angle": 90.0, "distance_cm": 54.2},
   "imu": {
@@ -30,16 +36,22 @@ identifies a full rover pass, e.g. `baseline-01` or `verify-01`; use a new
 value for every run. The server adds `received_at_utc` and `sender_ip` when it
 writes the raw log, but firmware must not send those two fields.
 
+The values in the packet above are valid only because it is explicitly marked
+as a fixture test. Never use placeholder IMU values in `learn` or `verify`
+telemetry.
+
 ## Fields and units
 
 | Field | Type | Unit / meaning |
 |---|---|---|
 | `timestamp` | number | Milliseconds since ESP32 boot. It must increase during a run. |
-| `mode` | string | Exactly `learn` or `verify`. |
+| `mode` | string | `test`, `learn`, or `verify`. `test` is never baseline data. |
+| `source` | string | `fixture` for a simulated test; `live` for real rover readings. |
 | `motor.left_speed`, `motor.right_speed` | number | Signed PWM command, convention agreed with firmware. |
 | `motor.duration_ms` | number | Duration of the active command. |
 | `scan.angle` | number | Servo angle in degrees; 90° is forward. |
 | `scan.distance_cm` | number or `null` | Ultrasonic range in centimetres after servo settling. |
+| `imu` | object or `null` | `null` is permitted only during a fixture test; otherwise it has accel/gyro below. |
 | `imu.accel` | three numbers | x/y/z acceleration in m/s². |
 | `imu.gyro` | three numbers | x/y/z angular velocity in degrees/s. |
 | `ir`, `temp_c` | number or `null` | Raw IR value; temperature in °C. |

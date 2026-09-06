@@ -11,6 +11,7 @@ VALID_PACKET = {
     "run_id": "test-run-01",
     "timestamp": 1,
     "mode": "learn",
+    "source": "live",
     "motor": {"left_speed": 0, "right_speed": 0, "duration_ms": 0},
     "scan": {"angle": 90, "distance_cm": 42.0},
     "imu": {"accel": [0, 0, 9.81], "gyro": [0, 0, 0]},
@@ -51,4 +52,3 @@ class TelemetryServerTests(unittest.TestCase):
         self.assertEqual(logged_packet["run_id"], "test-run-01")
         self.assertEqual(logged_packet["sender_ip"], "127.0.0.1")
         self.assertIn("received_at_utc", logged_packet)
-
