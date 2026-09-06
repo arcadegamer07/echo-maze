@@ -16,10 +16,12 @@ def update_pose(x, y, theta, d_left, d_right, wheel_base):
 
     return new_x, new_y, new_theta
 
-x, y, theta = update_pose(
-    0, 0, 0,
-    10, 20,
-    20
-)
 
-print(x, y, theta)
+if __name__ == "__main__":
+    x, y, theta = update_pose(
+        0, 0, 0,
+        10, 20,
+        20
+    )
+
+    print(x, y, theta)
