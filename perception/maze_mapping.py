@@ -1,47 +1,10 @@
 import math
 
-from scan_geometry import scan_to_world_point
-
 def world_to_cell(x, y, cell_size):
     cell_x = math.floor(x / cell_size)
     cell_y = math.floor(y / cell_size)
 
     return cell_x, cell_y
-
-def closest_wall(x, y, cell_x, cell_y, cell_size):
-    left = cell_x * cell_size
-    right = (cell_x + 1) * cell_size
-    bottom = cell_y * cell_size
-    top = (cell_y + 1) * cell_size
-
-    distances = {
-        "W": abs(x - left),
-        "E": abs(right - x),
-        "S": abs(y - bottom),
-        "N": abs(top - y)
-    }
-
-    return min(distances, key=distances.get)
-
-def detect_wall(x, y, cell_x, cell_y, cell_size, tolerance):
-    left = cell_x * cell_size
-    right = (cell_x + 1) * cell_size
-    bottom = cell_y * cell_size
-    top = (cell_y + 1) * cell_size
-
-    distances = {
-        "W": abs(x - left),
-        "E": abs(right - x),
-        "S": abs(y - bottom),
-        "N": abs(top - y)
-    }
-
-    wall = min(distances, key=distances.get)
-
-    if distances[wall] <= tolerance:
-        return wall
-
-    return None
 
 def robot_cell(x, y, cell_size):
     return world_to_cell(x, y, cell_size)
@@ -54,48 +17,6 @@ def scan_endpoint(robot_x, robot_y, direction, distance_cm):
     end_y = robot_y + distance_cm * math.sin(direction)
 
     return end_x, end_y
-
-def boundary_hit(robot_x, robot_y, direction, distance_cm, cell_size):
-    end_x, end_y = scan_endpoint(
-        robot_x,
-        robot_y,
-        direction,
-        distance_cm
-    )
-
-    start_cell_x, start_cell_y = world_to_cell(
-        robot_x,
-        robot_y,
-        cell_size
-    )
-
-    end_cell_x, end_cell_y = world_to_cell(
-        end_x,
-        end_y,
-        cell_size
-    )
-
-    return (
-        start_cell_x,
-        start_cell_y,
-        end_cell_x,
-        end_cell_y
-    )
-
-def crossed_wall(start_cell_x, start_cell_y, end_cell_x, end_cell_y):
-    dx = end_cell_x - start_cell_x
-    dy = end_cell_y - start_cell_y
-
-    if dx == 1:
-        return "E"
-    elif dx == -1:
-        return "W"
-    elif dy == 1:
-        return "N"
-    elif dy == -1:
-        return "S"
-
-    return None
 
 def distance_to_boundary(x, y, direction, cell_size):
     cell_x, cell_y = world_to_cell(x, y, cell_size)
@@ -119,16 +40,6 @@ def distance_to_boundary(x, y, direction, cell_size):
         dy = float("inf")
 
     return min(dx, dy)
-
-def boundary_detected(x, y, direction, sensor_distance, cell_size):
-    boundary_distance = distance_to_boundary(
-        x,
-        y,
-        direction,
-        cell_size
-    )
-
-    return sensor_distance >= boundary_distance
 
 def boundary_direction(x, y, direction, cell_size):
     cell_x, cell_y = world_to_cell(x, y, cell_size)
@@ -181,15 +92,6 @@ def create_cell():
         "W": 0.5
     }
 
-def update_wall_probability(cell, wall, wall_detected):
-    if wall_detected:
-        cell[wall] = min(1.0, cell[wall] + 0.1)
-    else:
-        cell[wall] = max(0.0, cell[wall] - 0.1)
-
-    cell[wall] = round(cell[wall], 2)
-    return cell
-
 def bayesian_update(prior, observation, p_detection_given_wall=0.9,
                     p_detection_given_no_wall=0.1):
     if observation:
@@ -211,23 +113,6 @@ def bayesian_update(prior, observation, p_detection_given_wall=0.9,
 def update_cell_bayesian(cell, wall, observation):
     cell[wall] = bayesian_update(cell[wall], observation)
     return cell
-
-def process_observation(x, y, cell_size, tolerance, observation):
-    cell_x, cell_y = world_to_cell(x, y, cell_size)
-
-    wall = detect_wall(
-        x, y,
-        cell_x, cell_y,
-        cell_size,
-        tolerance
-    )
-
-    cell = create_cell()
-
-    if wall is not None:
-        update_cell_bayesian(cell, wall, observation)
-
-    return cell_x, cell_y, wall, cell
 
 class MazeMap:
     def __init__(self):
@@ -266,24 +151,6 @@ class MazeMap:
             update_cell_bayesian(cell, wall, True)
 
         return cell_x, cell_y, direction, wall, boundary_distance, cell
-
-    def process_observation(self, x, y, cell_size, tolerance, observation):
-        cell_x, cell_y = world_to_cell(x, y, cell_size)
-
-        wall = detect_wall(
-            x, y,
-            cell_x, cell_y,
-            cell_size,
-            tolerance
-        )
-
-        cell = self.get_cell(cell_x, cell_y)
-
-        if wall is not None:
-            update_cell_bayesian(cell, wall, observation)
-
-        return cell_x, cell_y, wall, cell
-
 
 if __name__ == "__main__":
     maze = MazeMap()
