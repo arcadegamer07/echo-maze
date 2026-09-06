@@ -121,19 +121,43 @@ def create_cell():
         "W": 0.5
     }
 
+def sensor_endpoint_cell(x, y, direction, distance_cm, cell_size):
+    endpoint_x, endpoint_y = scan_endpoint(
+        x,
+        y,
+        direction,
+        distance_cm
+    )
+
+    return world_to_cell(
+        endpoint_x,
+        endpoint_y,
+        cell_size
+    )
+
 def update_occupancy(cell, occupied):
     if occupied:
         cell["occupancy"] = bayesian_update(
             cell["occupancy"],
-            True
+            False
         )
     else:
         cell["occupancy"] = bayesian_update(
             cell["occupancy"],
-            False
+            True
         )
 
     return cell
+
+def mark_free_cells(maze, ray_cells, obstacle_cell):
+    for cell_coords in ray_cells:
+        if cell_coords == obstacle_cell:
+            break
+
+        cell_x, cell_y = cell_coords
+        cell = maze.get_cell(cell_x, cell_y)
+
+        update_occupancy(cell, False)
 
 def bayesian_update(prior, observation, p_detection_given_wall=0.9,
                     p_detection_given_no_wall=0.1):
@@ -169,18 +193,15 @@ class MazeMap:
 
     def process_scan(self, robot_x, robot_y, robot_theta,
                      servo_angle, distance_cm, cell_size):
+
         direction = scan_direction(
             robot_theta,
             servo_angle
         )
 
-        wall, boundary_distance = find_boundary_hit(
-            robot_x,
-            robot_y,
-            direction,
-            distance_cm,
-            cell_size
-        )
+        wall = None
+        boundary_distance = None
+        ray_cells = []
 
         cell_x, cell_y = robot_cell(
             robot_x,
@@ -190,34 +211,64 @@ class MazeMap:
 
         cell = self.get_cell(cell_x, cell_y)
 
+        if distance_cm is not None:
+            wall, boundary_distance = find_boundary_hit(
+                robot_x,
+                robot_y,
+                direction,
+                distance_cm,
+                cell_size
+            )
+
+            obstacle_cell = sensor_endpoint_cell(
+                robot_x,
+                robot_y,
+                direction,
+                distance_cm,
+                cell_size
+            )
+
+            ray_cells = cells_along_ray(
+                robot_x,
+                robot_y,
+                direction,
+                distance_cm,
+                cell_size
+            )
+
+            mark_free_cells(
+                self,
+                ray_cells,
+                obstacle_cell
+            )
+
+            obstacle_x, obstacle_y = obstacle_cell
+            obstacle = self.get_cell(obstacle_x, obstacle_y)
+
+            update_occupancy(obstacle, True)
+
         if wall is not None:
             update_cell_bayesian(cell, wall, True)
 
-        return cell_x, cell_y, direction, wall, boundary_distance, cell
+        return cell_x, cell_y, direction, wall, boundary_distance, cell, ray_cells
 
+           
 if __name__ == "__main__":
     maze = MazeMap()
 
-    cell_x, cell_y, direction, wall, boundary_distance, cell = maze.process_scan(
-        100,   # robot x
-        50,    # robot y
-        0,     # robot heading
-        45,     # servo angle → East
-        20,    # sensor distance
-        30     # cell size
-    )
+    for i in range(3):
+        result = maze.process_scan(
+            100,
+            50,
+            0,
+            45,
+            20,
+            30
+        )
 
-    print("Cell:", cell_x, cell_y)
-    print("Scan direction:", math.degrees(direction))
-    print("Wall:", wall)
-    print("Boundary distance:", boundary_distance)
-    print("Confidence:", cell)
-    ray_cells = cells_along_ray(
-        100,
-        50,
-        math.radians(45),
-        20,
-        30
-    )
+        cell = result[5]
 
-    print("Ray cells:", ray_cells)
+        print("Observation", i + 1)
+        print("Occupancy:", cell["occupancy"])
+        print("North wall:", cell["N"])
+        print()
