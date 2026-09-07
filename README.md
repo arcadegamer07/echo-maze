@@ -23,8 +23,18 @@ The firmware connects to `ws://<laptop-ip>:8765`. The exact packet contract is
 in `telemetry_contract.md`. Do not start the anomaly model until raw packets
 are reliably being logged.
 
+The current hardware-independent firmware boundaries are documented in
+`firmware/INTEGRATION_PLAN.md`; the ML foundation and its learn/verify commands
+are documented in `ml/README.md`.
+
 Before hardware is ready, confirm the receiver using a simulated rover packet:
 
 ```powershell
 .\\.venv\\Scripts\\python.exe -m ml.send_test_packet
+```
+
+Run the laptop-side tests with:
+
+```powershell
+.\\.venv\\Scripts\\python.exe -m unittest discover -s tests -v
 ```

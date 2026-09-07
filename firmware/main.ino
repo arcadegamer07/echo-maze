@@ -3,6 +3,7 @@
 #include <WebSocketsClient.h>
 
 #include "secrets.h"
+#include "telemetry.h"
 
 WebSocketsClient webSocket;
 bool webSocketConnected = false;
@@ -36,19 +37,14 @@ void sendConnectivityTest() {
     return;
   }
 
-  const char* packet = R"json({
-    "run_id":"connectivity-test-01",
-    "timestamp":1000,
-    "mode":"test",
-    "source":"fixture",
-    "motor":{"left_speed":0,"right_speed":0,"duration_ms":0},
-    "scan":{"angle":90,"distance_cm":null},
-    "imu":null,
-    "ir":null,
-    "temp_c":null
-  })json";
+  TelemetrySample sample;
+  sample.runId = "connectivity-test-01";
+  sample.timestampMs = millis();
+  sample.mode = TelemetryMode::Test;
+  sample.scanAngleDeg = 90.0f;
 
   Serial.println("Sending connectivity-test-01...");
+  String packet = buildTelemetryJson(sample);
   webSocket.sendTXT(packet);
 }
 
