@@ -9,7 +9,9 @@ import {
   Gauge,
   Layers3,
   Link2,
+  Moon,
   Radio,
+  Sun,
   Wifi,
   WifiOff,
 } from 'lucide-react';
@@ -85,7 +87,9 @@ function parseLiveTelemetry(message: TelemetryMessage) {
   };
 }
 
-function Header({ connection, onLink, onReport }: { connection: SocketStatus; onLink: () => void; onReport: () => void }) {
+type ThemeMode = 'draft' | 'reproduction';
+
+function Header({ connection, onLink, onReport, theme, onToggleTheme }: { connection: SocketStatus; onLink: () => void; onReport: () => void; theme: ThemeMode; onToggleTheme: () => void }) {
   const live = connection === 'connected';
   const connecting = connection === 'connecting';
   return (
@@ -98,7 +102,11 @@ function Header({ connection, onLink, onReport }: { connection: SocketStatus; on
         </div>
       </div>
       <div className="top-meta">
-        <span className="top-date">07 SEP 2026 · FIELD UNIT 01</span>
+        <span className="top-date">07 SEP 2026 / FIELD UNIT 01</span>
+        <button className="mode-switch" onClick={onToggleTheme} aria-label={`Switch to ${theme === 'draft' ? 'reproduction' : 'draft'} mode`}>
+          {theme === 'draft' ? <Moon size={14} /> : <Sun size={14} />}
+          <span>{theme === 'draft' ? 'Draft' : 'Reproduction'}</span>
+        </button>
         <button className={`connection connection-button ${live ? 'is-live' : connecting ? 'is-connecting' : ''}`} onClick={onLink}>
           {live ? <Wifi size={14} /> : connecting ? <Radio size={14} /> : <WifiOff size={14} />}
           <i className="live-dot" />
@@ -135,7 +143,7 @@ function RunFacts() {
         <div><span>Baseline</span><strong>MAZE-ALPHA / v.01</strong></div>
         <div><span>Route</span><strong>{runMetadata.route}</strong></div>
         <div><span>Capture window</span><strong>00:02:14</strong></div>
-        <div><span>Model</span><strong>Isolation Forest · v1</strong></div>
+        <div><span>Model</span><strong>Isolation Forest / v1</strong></div>
         <div className="ledger-seal"><Check size={14} /> Raw packets immutable</div>
       </PanelBody>
     </Panel>
@@ -183,7 +191,7 @@ function Overview({ state, progress, connected, liveTelemetry, packetCount, onCo
           <PanelBody className="map-panel-body">
             <div className="map-toolbar">
               <span className="status-chip"><i />{state === 'LEARNING' || state === 'VERIFYING' ? 'Acquiring geometry' : 'Map registered'}</span>
-              <span className="toolbar-muted">16 × 10 cells · route 01</span>
+              <span className="toolbar-muted">16 × 10 cells / route 01</span>
               <button className="ghost-button" onClick={onToggleGhost}>{ghostOn ? 'Baseline visible' : 'Show baseline'}</button>
             </div>
             <GhostMapOverlay
@@ -195,7 +203,7 @@ function Overview({ state, progress, connected, liveTelemetry, packetCount, onCo
               interpolation={state === 'LEARNING' ? Math.max(.1, progress / 100) : state === 'VERIFYING' ? 1 : .72}
             />
             <div className="map-footer">
-              <span>Position {pose.x.toFixed(2)} m / {pose.y.toFixed(2)} m · heading {pose.heading}°</span>
+              <span>Position {pose.x.toFixed(2)} m / {pose.y.toFixed(2)} m / heading {pose.heading}°</span>
               <strong>Estimated drift ± 8 cm</strong>
             </div>
           </PanelBody>
@@ -233,9 +241,9 @@ function TelemetryWorkspace({ connected, liveTelemetry, packetCount, frame }: { 
           <PanelBody className="packet-anatomy">
             <div className="packet-row"><span>Run ID</span><strong>{runMetadata.id}</strong><em>string</em></div>
             <div className="packet-row"><span>Timestamp</span><strong>{(Date.now() % 100000).toLocaleString()} ms</strong><em>monotonic</em></div>
-            <div className="packet-row"><span>Mode</span><strong>{liveTelemetry?.motorState ?? 'Test / fixture'}</strong><em>learn · verify</em></div>
+            <div className="packet-row"><span>Mode</span><strong>{liveTelemetry?.motorState ?? 'Test / fixture'}</strong><em>learn / verify</em></div>
             <div className="packet-row"><span>IMU</span><strong>{liveTelemetry ? '3-axis / valid' : 'Canonical sample'}</strong><em>accel + gyro</em></div>
-            <div className="packet-row"><span>Optional</span><strong>scan · IR · temp</strong><em>null safe</em></div>
+            <div className="packet-row"><span>Optional</span><strong>scan / IR / temp</strong><em>null safe</em></div>
             <div className="packet-note"><CircleHelp size={15} /><span>Fixture packets validate transport only. Production learn/verify runs require live IMU readings.</span></div>
           </PanelBody>
         </Panel>
@@ -256,7 +264,7 @@ function Analysis({ ghostOn, onToggleGhost }: { ghostOn: boolean; onToggleGhost:
       <div className="analysis-grid">
         <Panel title="Time-indexed occupancy" code="INTERPOLATED GRID" className="analysis-map-panel">
           <PanelBody className="analysis-map-body">
-            <div className="map-toolbar"><span><Layers3 size={14} /> Current contribution · {time}%</span><button className="ghost-button" onClick={onToggleGhost}>{ghostOn ? 'Baseline visible' : 'Show baseline'}</button></div>
+            <div className="map-toolbar"><span><Layers3 size={14} /> Current contribution / {time}%</span><button className="ghost-button" onClick={onToggleGhost}>{ghostOn ? 'Baseline visible' : 'Show baseline'}</button></div>
             <div className="analysis-grid-canvas"><OccupancyGridView values={blended} pose={pose} ghostValues={ghostOn ? baselineGrid : undefined} /></div>
             <TimeMachineSlider value={time} onChange={setTime} />
           </PanelBody>
@@ -266,8 +274,8 @@ function Analysis({ ghostOn, onToggleGhost }: { ghostOn: boolean; onToggleGhost:
       <div className="analysis-bottom">
         <Panel title="Run pair" code="BASELINE / CURRENT">
           <PanelBody className="side-by-side">
-            <div><span>Baseline</span><strong>MAZE-ALPHA</strong><small>Healthy reference · 1,901 points</small><OccupancyGridView values={baselineGrid} mode="baseline" compact /></div>
-            <div><span>Current</span><strong>EM-0427-VR</strong><small>Verification capture · 1,842 points</small><OccupancyGridView values={currentGrid} mode="current" compact /></div>
+            <div><span>Baseline</span><strong>MAZE-ALPHA</strong><small>Healthy reference / 1,901 points</small><OccupancyGridView values={baselineGrid} mode="baseline" compact /></div>
+            <div><span>Current</span><strong>EM-0427-VR</strong><small>Verification capture / 1,842 points</small><OccupancyGridView values={currentGrid} mode="current" compact /></div>
           </PanelBody>
         </Panel>
         <Panel title="Evidence reading" code="MODEL NOTES">
@@ -278,7 +286,7 @@ function Analysis({ ghostOn, onToggleGhost }: { ghostOn: boolean; onToggleGhost:
           </PanelBody>
         </Panel>
       </div>
-      <div className="footer-strip"><span><Check size={13} /> Fusion ready</span><span>Diff threshold · 0.35</span><span>FFT window · 2.0 sec</span></div>
+      <div className="footer-strip"><span><Check size={13} /> Fusion ready</span><span>Diff threshold / 0.35</span><span>FFT window / 2.0 sec</span></div>
     </div>
   );
 }
@@ -294,6 +302,7 @@ export function EchoMazeDashboard() {
   const [ghostOn, setGhostOn] = useState(true);
   const [frame, setFrame] = useState(0);
   const [noticeOpen, setNoticeOpen] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>('reproduction');
 
   useEffect(() => {
     const unsubscribeStatus = socket.onStatus(setConnection);
@@ -314,7 +323,7 @@ export function EchoMazeDashboard() {
     const timer = window.setInterval(() => setProgress((value) => {
       if (value >= 100) {
         setState('COMPLETE');
-        setCommandNote('Route complete · evidence ready');
+        setCommandNote('Route complete / evidence ready');
         return 100;
       }
       return Math.min(100, value + 2);
@@ -344,8 +353,8 @@ export function EchoMazeDashboard() {
   };
 
   return (
-    <div className="app-shell">
-      <Header connection={connection} onLink={link} onReport={() => setView('report')} />
+    <div className={`app-shell theme-${theme}`}>
+      <Header connection={connection} onLink={link} onReport={() => setView('report')} theme={theme} onToggleTheme={() => setTheme((value) => value === 'draft' ? 'reproduction' : 'draft')} />
       <div className="mobile-nav">{nav.map((item) => <NavButton key={item.view} {...item} active={view === item.view} onClick={setView} />)}</div>
       <div className="body-layout">
         <aside className="sidebar">
@@ -360,8 +369,8 @@ export function EchoMazeDashboard() {
         </aside>
         <main className="main">
           <div className="view-heading">
-            <div><div className="eyebrow">Echo—Maze / {connection === 'connected' ? 'live bus' : 'local bus'}</div><h1>{titles[view][0]}</h1><p>{titles[view][1]} · {commandNote}.</p></div>
-            <div className={`run-chip ${state === 'VERIFYING' || state === 'STOPPED' ? 'review' : ''}`}><span className="live-dot" />{state === 'IDLE' ? 'Ready for command' : state === 'STOPPED' ? 'Run halted' : `${state} · ${runMetadata.id}`}</div>
+            <div><div className="eyebrow">Echo—Maze / {connection === 'connected' ? 'live bus' : 'local bus'}</div><h1>{titles[view][0]}</h1><p>{titles[view][1]} — {commandNote}.</p></div>
+            <div className={`run-chip ${state === 'VERIFYING' || state === 'STOPPED' ? 'review' : ''}`}><span className="live-dot" />{state === 'IDLE' ? 'Ready for command' : state === 'STOPPED' ? 'Run halted' : `${state} / ${runMetadata.id}`}</div>
           </div>
           <MissionStrip connection={connection} packetCount={packetCount} state={state} />
           {view === 'overview' && <Overview state={state} progress={progress} connected={connection === 'connected'} liveTelemetry={liveTelemetry} packetCount={packetCount} onCommand={command} onView={setView} ghostOn={ghostOn} onToggleGhost={() => setGhostOn((value) => !value)} frame={frame} />}
