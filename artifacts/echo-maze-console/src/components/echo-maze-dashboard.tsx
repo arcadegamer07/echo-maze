@@ -41,6 +41,7 @@ import { GhostMapOverlay } from './GhostMapOverlay';
 import { OccupancyGridView } from './OccupancyGridView';
 import { PointCloudView } from './PointCloudView';
 import { LiveTraceView } from './LiveTraceView';
+import { LiveLineMap } from './LiveLineMap';
 import { ScorePanel } from './ScorePanel';
 import { TelemetryPanel } from './TelemetryPanel';
 import { TimeMachineSlider } from './TimeMachineSlider';
@@ -186,28 +187,29 @@ function Overview({ state, progress, connected, liveTelemetry, packetCount, onCo
   liveMap: LiveMapState;
 }) {
   const visibleTelemetry = liveTelemetry ?? telemetry;
+  const hasLiveMap = liveMap.latest?.source === 'live' && liveMap.packetCount > 0;
   const points = useMemo(() => makePointCloud(frame / 9), [frame]);
   return (
     <div className="view-stack">
       <div className="overview-grid">
-        <Panel title="Environment reconstruction" code="10 CM / LOG-ODDS GRID" className="map-panel">
+        <Panel title={hasLiveMap ? 'Live environment reconstruction' : 'Environment reconstruction'} code="10 CM / LOG-ODDS GRID" className="map-panel">
           <PanelBody className="map-panel-body">
             <div className="map-toolbar">
-              <span className="status-chip"><i />{connected ? 'Live range trace below' : state === 'LEARNING' || state === 'VERIFYING' || state === 'EXPLORING' ? 'Acquiring geometry' : 'Reference map preview'}</span>
-              <span className="toolbar-muted">16 × 10 cells / route 01</span>
-              <button className="ghost-button" onClick={onToggleGhost}>{ghostOn ? 'Baseline visible' : 'Show baseline'}</button>
+              <span className="status-chip"><i />{hasLiveMap ? 'Live range evidence + danger overlay' : connected ? 'Live range trace below' : state === 'LEARNING' || state === 'VERIFYING' || state === 'EXPLORING' ? 'Acquiring geometry' : 'Reference map preview'}</span>
+              <span className="toolbar-muted">{hasLiveMap ? `${liveMap.packetCount} frames / ${liveMap.dangerCount} red cells` : '16 × 10 cells / route 01'}</span>
+              {!hasLiveMap && <button className="ghost-button" onClick={onToggleGhost}>{ghostOn ? 'Baseline visible' : 'Show baseline'}</button>}
             </div>
-            <GhostMapOverlay
+            {hasLiveMap ? <LiveLineMap state={liveMap} /> : <GhostMapOverlay
               baseline={baselineGrid}
               current={currentGrid}
               pose={pose}
               enabled={ghostOn}
               onToggle={onToggleGhost}
               interpolation={state === 'LEARNING' ? Math.max(.1, progress / 100) : state === 'VERIFYING' ? 1 : .72}
-            />
+            />}
             <div className="map-footer">
-              <span>{liveMap.latest ? `Live trace ${ (liveMap.pose.xCm / 100).toFixed(2) } m / ${ (liveMap.pose.yCm / 100).toFixed(2) } m / heading ${ poseHeadingDeg(liveMap.pose).toFixed(1) }°` : `Preview pose ${pose.x.toFixed(2)} m / ${pose.y.toFixed(2)} m / heading ${pose.heading}°`}</span>
-              <strong>{liveMap.latest ? `${liveMap.packetCount} packets plotted` : 'Awaiting live trace'}</strong>
+              <span>{hasLiveMap ? `Live trace ${ (liveMap.pose.xCm / 100).toFixed(2) } m / ${ (liveMap.pose.yCm / 100).toFixed(2) } m / heading ${ poseHeadingDeg(liveMap.pose).toFixed(1) }°` : `Preview pose ${pose.x.toFixed(2)} m / ${pose.y.toFixed(2)} m / heading ${pose.heading}°`}</span>
+              <strong>{hasLiveMap ? `${liveMap.packetCount} packets plotted` : 'Awaiting live trace'}</strong>
             </div>
           </PanelBody>
         </Panel>
@@ -257,30 +259,48 @@ function TelemetryWorkspace({ connected, liveTelemetry, packetCount, frame, live
   );
 }
 
-function Analysis({ ghostOn, onToggleGhost }: { ghostOn: boolean; onToggleGhost: () => void }) {
+function Analysis({ ghostOn, onToggleGhost, liveMap }: { ghostOn: boolean; onToggleGhost: () => void; liveMap: LiveMapState }) {
   const [time, setTime] = useState(72);
   const blended = currentGrid.map((value, index) => baselineGrid[index] * (1 - time / 100) + value * (time / 100));
+  const hasLiveMap = liveMap.latest?.source === 'live' && liveMap.packetCount > 0;
   return (
     <div className="view-stack">
       <div className="workspace-heading">
-        <div><div className="eyebrow">Spatial comparison</div><h2>Baseline ↔ current</h2><p>Registered geometry, reviewed cell by cell.</p></div>
-        <div className="analysis-tags"><span>Baseline locked</span><span className="tag-alert">2 review zones</span></div>
+        <div><div className="eyebrow">Spatial comparison</div><h2>{hasLiveMap ? 'Live field / danger map' : 'Baseline ↔ current'}</h2><p>{hasLiveMap ? 'Current occupancy reconstructed from live ultrasonic evidence.' : 'Registered geometry, reviewed cell by cell.'}</p></div>
+        <div className="analysis-tags"><span>{hasLiveMap ? `LIVE / ${liveMap.runId ?? 'unnamed run'}` : 'Baseline locked'}</span><span className="tag-alert">{hasLiveMap ? `${liveMap.dangerCount} danger cells` : '2 review zones'}</span></div>
       </div>
       <div className="analysis-grid">
-        <Panel title="Time-indexed occupancy" code="INTERPOLATED GRID" className="analysis-map-panel">
+        <Panel title={hasLiveMap ? 'Live occupancy + danger field' : 'Time-indexed occupancy'} code={hasLiveMap ? 'LIVE / 10 CM LOG-ODDS' : 'INTERPOLATED GRID'} className="analysis-map-panel">
           <PanelBody className="analysis-map-body">
-            <div className="map-toolbar"><span><Layers3 size={14} /> Current contribution / {time}%</span><button className="ghost-button" onClick={onToggleGhost}>{ghostOn ? 'Baseline visible' : 'Show baseline'}</button></div>
-            <div className="analysis-grid-canvas"><OccupancyGridView values={blended} pose={pose} ghostValues={ghostOn ? baselineGrid : undefined} /></div>
-            <TimeMachineSlider value={time} onChange={setTime} />
+            {hasLiveMap ? (
+              <>
+                <div className="map-toolbar"><span><Radio size={14} /> Live range evidence / danger overlay</span><span className="toolbar-muted">{liveMap.packetCount} frames · {liveMap.dangerCount} red cells</span></div>
+                <LiveLineMap state={liveMap} />
+              </>
+            ) : (
+              <>
+                <div className="map-toolbar"><span><Layers3 size={14} /> Current contribution / {time}%</span><button className="ghost-button" onClick={onToggleGhost}>{ghostOn ? 'Baseline visible' : 'Show baseline'}</button></div>
+                <div className="analysis-grid-canvas"><OccupancyGridView values={blended} pose={pose} ghostValues={ghostOn ? baselineGrid : undefined} /></div>
+                <TimeMachineSlider value={time} onChange={setTime} />
+              </>
+            )}
           </PanelBody>
         </Panel>
-        <DiffHeatmap values={diffGrid} zones={diffZones} />
+        {hasLiveMap ? (
+          <Panel title="Obstacle evidence" code="STOP / REVERSE EVENTS">
+            <PanelBody className="analysis-live-evidence">
+              <div className="live-evidence-stat"><span>Red danger cells</span><strong>{liveMap.dangerCount}</strong><small>Unique 10 cm cells marked from close ultrasonic hits or Explore avoidance.</small></div>
+              <div className="live-evidence-stat"><span>Current rover position</span><strong>{(liveMap.pose.xCm / 100).toFixed(2)} m / {(liveMap.pose.yCm / 100).toFixed(2)} m</strong><small>{(liveMap.pose.confidence * 100).toFixed(1)}% command-pose confidence · heading {poseHeadingDeg(liveMap.pose).toFixed(1)}°</small></div>
+              <div className="live-evidence-note"><i className="trace-legend-danger" /> A red cell is a navigation hazard marker, not a structural-damage classification.</div>
+            </PanelBody>
+          </Panel>
+        ) : <DiffHeatmap values={diffGrid} zones={diffZones} />}
       </div>
       <div className="analysis-bottom">
         <Panel title="Run pair" code="BASELINE / CURRENT">
           <PanelBody className="side-by-side">
             <div><span>Baseline</span><strong>MAZE-ALPHA</strong><small>Healthy reference / 1,901 points</small><OccupancyGridView values={baselineGrid} mode="baseline" compact /></div>
-            <div><span>Current</span><strong>EM-0427-VR</strong><small>Verification capture / 1,842 points</small><OccupancyGridView values={currentGrid} mode="current" compact /></div>
+            {hasLiveMap ? <div className="live-run-card"><span>Current live run</span><strong>{liveMap.runId ?? 'LIVE'}</strong><small>{liveMap.packetCount} frames · {liveMap.dangerCount} danger cells · {liveMap.mapConfidence.toFixed(1)}% map confidence</small><div className="live-run-status">Live map is shown above; run is ready for baseline registration and temporal diff.</div></div> : <div><span>Current</span><strong>EM-0427-VR</strong><small>Verification capture / 1,842 points</small><OccupancyGridView values={currentGrid} mode="current" compact /></div>}
           </PanelBody>
         </Panel>
         <Panel title="Evidence reading" code="MODEL NOTES">
@@ -389,7 +409,7 @@ export function EchoMazeDashboard() {
           <MissionStrip connection={connection} packetCount={packetCount} state={state} />
           {view === 'overview' && <Overview state={state} progress={progress} connected={connection === 'connected'} liveTelemetry={liveTelemetry} packetCount={packetCount} onCommand={command} onView={setView} ghostOn={ghostOn} onToggleGhost={() => setGhostOn((value) => !value)} frame={frame} liveMap={liveMap} />}
           {view === 'telemetry' && <TelemetryWorkspace connected={connection === 'connected'} liveTelemetry={liveTelemetry} packetCount={packetCount} frame={frame} liveMap={liveMap} />}
-          {view === 'analysis' && <Analysis ghostOn={ghostOn} onToggleGhost={() => setGhostOn((value) => !value)} />}
+          {view === 'analysis' && <Analysis ghostOn={ghostOn} onToggleGhost={() => setGhostOn((value) => !value)} liveMap={liveMap} />}
           {view === 'report' && <FinalReport metadata={runMetadata} scores={scores} onExport={() => setCommandNote('Report staged for export')} />}
         </main>
       </div>

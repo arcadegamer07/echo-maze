@@ -27,6 +27,13 @@ export type LiveRangePoint = {
   timestamp: number;
   temperatureC: number | null;
   ir: number | null;
+  danger: boolean;
+};
+
+export type LiveDangerCell = {
+  reason: 'close-range' | 'avoidance';
+  distanceCm: number | null;
+  timestamp: number;
 };
 
 export type LivePacketSummary = {
@@ -54,8 +61,11 @@ export type LiveMapState = {
   latest: LivePacketSummary | null;
   /** Sparse occupancy probabilities keyed by integer cell coordinates. */
   occupancy: Record<string, number>;
+  /** Cells that caused a close-range stop or an explore reverse/pivot. */
+  dangerCells: Record<string, LiveDangerCell>;
   occupancyBounds: { minX: number; maxX: number; minY: number; maxY: number };
   mapConfidence: number;
+  dangerCount: number;
 };
 
 // These are intentionally visible in the UI so the team can calibrate them.
@@ -72,6 +82,7 @@ export const LIVE_MAPPING_CONFIG = {
   returnLimit: 1400,
   cellSizeCm: 10,
   mapMaxRangeCm: 250,
+  obstacleDistanceCm: 22,
 } as const;
 
 const HIT_LOG_ODDS = Math.log(.85 / .15);
@@ -102,8 +113,10 @@ export function createLiveMapState(): LiveMapState {
     lastTimestamp: null,
     latest: null,
     occupancy: {},
+    dangerCells: {},
     occupancyBounds: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
     mapConfidence: 0,
+    dangerCount: 0,
   };
 }
 
@@ -195,19 +208,59 @@ function updateOccupancy(
   return next;
 }
 
-function occupancySummary(occupancy: Record<string, number>, pose: LivePose) {
+function endpointForReading(
+  pose: LivePose,
+  angleDeg: number,
+  distanceCm: number,
+) {
+  const angleRad = pose.headingRad
+    + (angleDeg - LIVE_MAPPING_CONFIG.servoCenterDeg) * Math.PI / 180;
+  return {
+    xCm: pose.xCm + distanceCm * Math.cos(angleRad),
+    yCm: pose.yCm + distanceCm * Math.sin(angleRad),
+  };
+}
+
+function markDanger(
+  dangerCells: Record<string, LiveDangerCell>,
+  xCm: number,
+  yCm: number,
+  reason: LiveDangerCell['reason'],
+  distanceCm: number | null,
+  timestamp: number,
+) {
+  const key = cellKey(worldToCell(xCm), worldToCell(yCm));
+  return {
+    ...dangerCells,
+    [key]: {
+      reason,
+      distanceCm,
+      timestamp,
+    },
+  };
+}
+
+function occupancySummary(
+  occupancy: Record<string, number>,
+  dangerCells: Record<string, LiveDangerCell>,
+  pose: LivePose,
+) {
   const keys = Object.keys(occupancy);
+  const dangerKeys = Object.keys(dangerCells);
   const poseCell: [number, number] = [worldToCell(pose.xCm), worldToCell(pose.yCm)];
-  if (!keys.length) {
+  if (!keys.length && !dangerKeys.length) {
     return {
       bounds: { minX: poseCell[0], maxX: poseCell[0], minY: poseCell[1], maxY: poseCell[1] },
       confidence: 0,
     };
   }
   const cells = keys.map((key) => key.split(',').map(Number) as [number, number]);
-  const allX = [...cells.map(([x]) => x), poseCell[0]];
-  const allY = [...cells.map(([, y]) => y), poseCell[1]];
-  const confidence = Object.values(occupancy).reduce((sum, probability) => sum + 2 * Math.abs(probability - .5), 0) / keys.length * 100;
+  const dangerCellsAsCoordinates = dangerKeys.map((key) => key.split(',').map(Number) as [number, number]);
+  const allX = [...cells.map(([x]) => x), ...dangerCellsAsCoordinates.map(([x]) => x), poseCell[0]];
+  const allY = [...cells.map(([, y]) => y), ...dangerCellsAsCoordinates.map(([, y]) => y), poseCell[1]];
+  const confidence = keys.length
+    ? Object.values(occupancy).reduce((sum, probability) => sum + 2 * Math.abs(probability - .5), 0) / keys.length * 100
+    : 0;
   return {
     bounds: {
       minX: Math.min(...allX), maxX: Math.max(...allX),
@@ -247,40 +300,75 @@ export function consumeTelemetry(state: LiveMapState, message: TelemetryMessage)
   };
   const pathPoint: LivePathPoint = { ...pose, timestamp: packet.timestamp };
   const nextPath = [...base.path, pathPoint].slice(-LIVE_MAPPING_CONFIG.pathLimit);
-  const rangePoint: LiveRangePoint | null = mappable && packet.distanceCm !== null
+  const validRange = mappable && packet.distanceCm !== null
     && packet.distanceCm >= 0
-    && packet.distanceCm <= LIVE_MAPPING_CONFIG.maxRangeCm
+    && packet.distanceCm <= LIVE_MAPPING_CONFIG.maxRangeCm;
+  const rangeEndpoint = validRange
+    ? endpointForReading(pose, packet.angleDeg, packet.distanceCm as number)
+    : null;
+  const rangePoint: LiveRangePoint | null = rangeEndpoint
     ? {
       originXcm: pose.xCm,
       originYcm: pose.yCm,
-      // Firmware servo angle 90° is forward; convert to a rover-relative angle.
-      xCm: pose.xCm + packet.distanceCm * Math.cos(
-        pose.headingRad + (packet.angleDeg - LIVE_MAPPING_CONFIG.servoCenterDeg) * Math.PI / 180,
-      ),
-      yCm: pose.yCm + packet.distanceCm * Math.sin(
-        pose.headingRad + (packet.angleDeg - LIVE_MAPPING_CONFIG.servoCenterDeg) * Math.PI / 180,
-      ),
-      distanceCm: packet.distanceCm,
+      xCm: rangeEndpoint.xCm,
+      yCm: rangeEndpoint.yCm,
+      distanceCm: packet.distanceCm as number,
       angleDeg: packet.angleDeg,
       timestamp: packet.timestamp,
       temperatureC: packet.temperatureC,
       ir: packet.ir,
+      danger: (packet.distanceCm as number) <= LIVE_MAPPING_CONFIG.obstacleDistanceCm,
     }
     : null;
   const nextReturns = rangePoint
     ? [...base.returns, rangePoint].slice(-LIVE_MAPPING_CONFIG.returnLimit)
     : base.returns;
+  // A null/no-echo reading is still useful evidence: it means the ray was
+  // clear out to the configured maximum range. Only a finite return shorter
+  // than that limit paints an occupied endpoint.
+  const noEchoEndpoint = mappable && (packet.distanceCm === null || packet.distanceCm >= LIVE_MAPPING_CONFIG.mapMaxRangeCm)
+    ? endpointForReading(pose, packet.angleDeg, LIVE_MAPPING_CONFIG.mapMaxRangeCm)
+    : null;
   const nextOccupancy = rangePoint
-    ? updateOccupancy(
-      base.occupancy,
-      rangePoint.originXcm,
-      rangePoint.originYcm,
+    ? updateOccupancy(base.occupancy, rangePoint.originXcm, rangePoint.originYcm, rangePoint.xCm, rangePoint.yCm, packet.distanceCm! < LIVE_MAPPING_CONFIG.mapMaxRangeCm)
+    : noEchoEndpoint
+      ? updateOccupancy(base.occupancy, pose.xCm, pose.yCm, noEchoEndpoint.xCm, noEchoEndpoint.yCm, false)
+      : base.occupancy;
+  const previousWasForward = base.latest !== null
+    && base.latest.source === 'live'
+    && base.latest.leftSpeed > 0
+    && base.latest.rightSpeed > 0;
+  const isExploreAvoidance = mappable
+    && packet.mode === 'explore'
+    && packet.leftSpeed < 0
+    && packet.rightSpeed < 0
+    && previousWasForward;
+  const closeRangeDanger = rangePoint?.danger === true;
+  let nextDangerCells = base.dangerCells;
+  if (closeRangeDanger && rangePoint) {
+    nextDangerCells = markDanger(
+      nextDangerCells,
       rangePoint.xCm,
       rangePoint.yCm,
-      true,
-    )
-    : base.occupancy;
-  const occupancy = occupancySummary(nextOccupancy, pose);
+      'close-range',
+      rangePoint.distanceCm,
+      packet.timestamp,
+    );
+  }
+  if (isExploreAvoidance && !closeRangeDanger) {
+    // If the reverse was triggered by an IR hit or repeated no-echo reads,
+    // preserve a red marker just ahead of the last estimated pose.
+    const markerDistance = LIVE_MAPPING_CONFIG.obstacleDistanceCm;
+    nextDangerCells = markDanger(
+      nextDangerCells,
+      base.pose.xCm + markerDistance * Math.cos(base.pose.headingRad),
+      base.pose.yCm + markerDistance * Math.sin(base.pose.headingRad),
+      'avoidance',
+      packet.distanceCm,
+      packet.timestamp,
+    );
+  }
+  const occupancy = occupancySummary(nextOccupancy, nextDangerCells, pose);
   return {
     runId: mappable ? packet.runId ?? base.runId : base.runId,
     pose,
@@ -291,8 +379,10 @@ export function consumeTelemetry(state: LiveMapState, message: TelemetryMessage)
     lastTimestamp: mappable ? packet.timestamp : base.lastTimestamp,
     latest: { ...packet, dtSec },
     occupancy: nextOccupancy,
+    dangerCells: nextDangerCells,
     occupancyBounds: occupancy.bounds,
     mapConfidence: occupancy.confidence,
+    dangerCount: Object.keys(nextDangerCells).length,
   };
 }
 

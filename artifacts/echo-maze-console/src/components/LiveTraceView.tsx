@@ -1,6 +1,5 @@
 import { Activity, AlertTriangle, Crosshair, Gauge, MapPin, Radio, Ruler } from 'lucide-react';
 import { DashboardPanel, PanelBody } from './DashboardPanel';
-import { LiveConfidenceMatrix } from './LiveConfidenceMatrix';
 import {
   LIVE_MAPPING_CONFIG,
   poseHeadingDeg,
@@ -17,9 +16,19 @@ function metres(valueCm: number) {
 }
 
 function TraceMap({ state }: { state: LiveMapState }) {
+  const dangerPoints = Object.entries(state.dangerCells).map(([key, evidence]) => {
+    const [cellX, cellY] = key.split(',').map(Number);
+    return {
+      ...evidence,
+      xCm: (cellX + 0.5) * LIVE_MAPPING_CONFIG.cellSizeCm,
+      yCm: (cellY + 0.5) * LIVE_MAPPING_CONFIG.cellSizeCm,
+      key,
+    };
+  });
   const coordinates = [
     ...state.path.map((point) => [point.xCm, point.yCm] as const),
     ...state.returns.flatMap((point) => [[point.xCm, point.yCm] as const, [point.originXcm, point.originYcm] as const]),
+    ...dangerPoints.map((point) => [point.xCm, point.yCm] as const),
     [0, 0] as const,
   ];
   const rawMinX = Math.min(...coordinates.map(([x]) => x));
@@ -62,7 +71,14 @@ function TraceMap({ state }: { state: LiveMapState }) {
         const [originX, originY] = project(point.originXcm, point.originYcm);
         return <g key={`${point.timestamp}-${index}`}>
           <line className="trace-ray" x1={originX} y1={originY} x2={x} y2={y} />
-          <circle className="trace-return" cx={x} cy={y} r={index % 6 === 0 ? 3 : 2} opacity={.32 + (index / Math.max(1, visibleReturns.length)) * .58} />
+          <circle className={`trace-return${point.danger ? ' trace-return-danger' : ''}`} cx={x} cy={y} r={point.danger ? 4 : index % 6 === 0 ? 3 : 2} opacity={point.danger ? 1 : .32 + (index / Math.max(1, visibleReturns.length)) * .58} />
+        </g>;
+      })}
+      {dangerPoints.map((point) => {
+        const [x, y] = project(point.xCm, point.yCm);
+        return <g key={`danger-${point.key}`}>
+          <circle className="trace-danger-cell" cx={x} cy={y} r="7" />
+          <text className="trace-danger-label" x={x + 10} y={y - 8}>DANGER</text>
         </g>;
       })}
       {state.path.length > 1 && <polyline className="trace-path" points={pathPoints} />}
@@ -116,8 +132,7 @@ export function LiveTraceView({ state, connected }: { state: LiveMapState; conne
             <div className="trace-note"><Gauge size={14} /><span>Dots are real ultrasonic returns. The line is command-based dead reckoning; if the rover stalls, slips, or is lifted, telemetry can still look “forward” while the true position stays still.</span></div>
           </div>
         </div>
-        <div className="live-trace-legend"><span><i className="trace-legend-path" /> MOVEMENT PATH</span><span><i className="trace-legend-return" /> ULTRASONIC HIT</span><span><i className="trace-legend-start" /> START</span><span><Ruler size={12} /> AUTO-FIT WORLD FRAME</span><Radio size={12} />{state.runId ?? 'no run selected'}</div>
-        <LiveConfidenceMatrix state={state} />
+        <div className="live-trace-legend"><span><i className="trace-legend-path" /> MOVEMENT PATH</span><span><i className="trace-legend-return" /> ULTRASONIC HIT</span><span><i className="trace-legend-danger" /> DANGER / AVOIDANCE</span><span><i className="trace-legend-start" /> START</span><span><Ruler size={12} /> AUTO-FIT WORLD FRAME</span><Radio size={12} />{state.runId ?? 'no run selected'}</div>
       </PanelBody>
     </DashboardPanel>
   );
