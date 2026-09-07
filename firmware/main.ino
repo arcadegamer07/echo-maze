@@ -122,6 +122,7 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
     case WStype_CONNECTED:
       webSocketConnected = true;
       lastWebSocketActivityMs = millis();
+      showStatus("ONLINE", "receiver linked");
       Serial.println("WebSocket CONNECTED");
       break;
     case WStype_TEXT: {
