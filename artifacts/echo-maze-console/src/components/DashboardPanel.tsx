@@ -14,7 +14,10 @@ export function DashboardPanel({
   return (
     <section className={`panel ${className}`}>
       <header className="panel-head">
-        <h2 className="panel-title">{title}</h2>
+        <div className="panel-heading-lockup">
+          <span className="panel-index" aria-hidden="true" />
+          <h2 className="panel-title">{title}</h2>
+        </div>
         {code && <span className="panel-code">{code}</span>}
       </header>
       {children}
