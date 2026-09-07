@@ -5,6 +5,14 @@
 // Echo-Maze ESP32 Dev Module logical pin assignment.
 // Keep wiring and firmware synchronized through firmware/pinout.md.
 namespace EchoPins {
+// Motor leads on the assembled chassis are oriented so the electrical
+// direction produced by the TB6612 must be inverted for both channels to make
+// the rover's logical +speed mean physical forward. Keep this calibration
+// here (rather than hiding it in the Explore state machine) so route driving,
+// diagnostics, telemetry, and safety stops all share the same convention.
+constexpr int8_t MotorADirectionSign = -1;
+constexpr int8_t MotorBDirectionSign = -1;
+
 constexpr uint8_t MotorPwmA = 14;
 constexpr uint8_t MotorAin1 = 27;
 constexpr uint8_t MotorAin2 = 26;
