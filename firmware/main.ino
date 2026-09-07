@@ -3,6 +3,8 @@
 #include <Wire.h>
 #include <WebSocketsClient.h>
 #include <ESP32Servo.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
 #include "secrets.h"
 #include "hardware_config.h"
@@ -24,6 +26,8 @@ int16_t commandedRight = 0;
 uint32_t commandDurationMs = 0;
 String activeRunId;
 Servo turretServo;
+Adafruit_SSD1306 oled(128, 64, &Wire, -1);
+bool oledReady = false;
 uint8_t scanIndex = 0;
 TelemetryMode activeMode = TelemetryMode::Test;
 bool routeActive = false;
@@ -39,12 +43,23 @@ const RouteStep kRoute[] = {
 };
 constexpr uint8_t kRouteLength = sizeof(kRoute) / sizeof(kRoute[0]);
 
+void showStatus(const char* title, const char* detail = nullptr) {
+  if (!oledReady) return;
+  oled.clearDisplay(); oled.setTextColor(SSD1306_WHITE); oled.setTextSize(1);
+  oled.setCursor(0, 0); oled.println("ECHO-MAZE");
+  oled.setTextSize(2); oled.setCursor(0, 16); oled.println(title);
+  oled.setTextSize(1); oled.setCursor(0, 48);
+  if (detail) oled.println(detail);
+  oled.display();
+}
+
 void stopRover(const char* reason) {
   motorController.stop();
   commandedLeft = 0;
   commandedRight = 0;
   commandDurationMs = 0;
   routeActive = false;
+  showStatus("STOPPED", reason);
   Serial.print("ROVER STOPPED: ");
   Serial.println(reason);
 }
@@ -71,6 +86,7 @@ void startRun(TelemetryMode mode) {
   routeStepStartedMs = millis();
   scanIndex = 0;
   setMotors(kRoute[0].left, kRoute[0].right, kRoute[0].durationMs);
+  showStatus(mode == TelemetryMode::Learn ? "LEARN" : "VERIFY", "route active");
   Serial.print("Run started: "); Serial.println(activeRunId);
   sendAck(true, mode == TelemetryMode::Learn ? "learn started" : "verify started");
 }
@@ -197,6 +213,8 @@ void setup() {
   Serial.begin(115200); delay(1000);
   sensorSuiteReady = sensorSuite.begin();
   motorController.begin();
+  oledReady = oled.begin(SSD1306_SWITCHCAPVCC, EchoAddresses::Oled);
+  showStatus("READY", "gyro-free mode");
   turretServo.setPeriodHertz(50);
   turretServo.attach(EchoPins::ServoSignal, 500, 2400);
   turretServo.write(90);
