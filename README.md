@@ -67,6 +67,7 @@ for packet in packets:
     grid.update_scan(
         pose.pose.x_cm, pose.pose.y_cm, pose.pose.heading_rad,
         [packet["scan"]],
+        servo_center_deg=90.0,  # firmware turret: 90° points forward
     )
 
 store = BaselineStore("data")

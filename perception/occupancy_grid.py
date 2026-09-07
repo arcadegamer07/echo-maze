@@ -137,8 +137,14 @@ class OccupancyGrid:
         readings: Iterable[Mapping[str, Any] | tuple[float, float | None]],
         *,
         max_range_cm: float = 250.0,
+        servo_center_deg: float = 0.0,
     ) -> None:
-        """Update free ray cells and hit cells from one ultrasonic sweep."""
+        """Update free ray cells and hit cells from one ultrasonic sweep.
+
+        ``servo_center_deg=90`` is the Echo-Maze firmware convention (the
+        centre of its 0--180° turret points forward).  The default remains
+        0° for compatibility with the original low-level helper API.
+        """
 
         if max_range_cm <= 0:
             raise ValueError("max_range_cm must be positive")
@@ -153,7 +159,7 @@ class OccupancyGrid:
             if angle is None:
                 continue
             try:
-                angle_rad = math.radians(float(angle))
+                angle_rad = math.radians(float(angle) - float(servo_center_deg))
                 distance_value = None if distance is None else float(distance)
             except (TypeError, ValueError):
                 continue
@@ -223,4 +229,3 @@ class OccupancyGrid:
             cell = (int(col + snapshot.origin_cell[0]), int(row + snapshot.origin_cell[1]))
             grid._log_odds[cell] = _logit(float(snapshot.probabilities[row, col]))
         return grid
-
