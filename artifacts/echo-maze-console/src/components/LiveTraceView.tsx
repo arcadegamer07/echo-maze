@@ -97,7 +97,7 @@ export function LiveTraceView({ state, connected }: { state: LiveMapState; conne
         <div className="live-trace-toolbar">
           <span className="status-chip"><i className={connected ? '' : 'is-muted'} />{connected ? 'Plotting received packets' : 'Connect receiver to plot'}</span>
           <span className="trace-method"><Activity size={13} /> command odometry / {LIVE_MAPPING_CONFIG.speedScaleCmPerSecondPerPwm.toFixed(2)} cm·s⁻¹·PWM⁻¹</span>
-          <span className="trace-method"><Crosshair size={13} /> {latest?.mode === 'test' ? '90° forward safety scan' : `${LIVE_MAPPING_CONFIG.scanStartDeg}–${LIVE_MAPPING_CONFIG.scanEndDeg}° sweep / 90° forward`}</span>
+          <span className="trace-method"><Crosshair size={13} /> {latest?.mode === 'test' || latest?.mode === 'explore' ? '90° forward safety scan' : `${LIVE_MAPPING_CONFIG.scanStartDeg}–${LIVE_MAPPING_CONFIG.scanEndDeg}° sweep / 90° forward`}</span>
         </div>
         <div className="trace-integrity-banner">
           <AlertTriangle size={14} />

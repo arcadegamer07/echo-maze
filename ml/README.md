@@ -40,8 +40,9 @@ python -m ml.pipeline verify `
 
 The firmware also accepts a guarded exploratory command through the same
 receiver.  It is useful for a first hardware bring-up, but it is not a
-repeatable baseline route and its `test` telemetry is intentionally excluded
-from model training:
+repeatable baseline route. Its `explore` telemetry is mappable for the live
+occupancy view but is intentionally excluded from model training; `test`
+telemetry remains connectivity-only:
 
 ```powershell
 python -m ml.send_command explore --duration-ms 10000

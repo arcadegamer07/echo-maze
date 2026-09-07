@@ -15,6 +15,7 @@ enum class TelemetryMode : uint8_t {
   Test,
   Learn,
   Verify,
+  Explore,
 };
 
 struct TelemetrySample {

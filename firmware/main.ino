@@ -148,7 +148,10 @@ void startExplore(uint32_t durationMs) {
   commandedLeft = 0;
   commandedRight = 0;
   commandDurationMs = 0;
-  activeMode = TelemetryMode::Test;
+  // Exploration is real sensor data, not a connectivity fixture. Keep
+  // mode=test reserved for the serial `p` fixture packet so the live map can
+  // consume explore frames safely.
+  activeMode = TelemetryMode::Explore;
   activeRunId = String("explore-") + String(millis());
   exploreActive = true;
   explorePhase = ExplorePhase::Forward;

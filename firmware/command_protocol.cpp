@@ -29,6 +29,9 @@ RoverCommand parseRoverCommand(const char* payload) {
   if (hasCommand(payload, "run_route")) {
     return RoverCommand::RunRoute;
   }
+  if (hasCommand(payload, "explore")) {
+    return RoverCommand::Explore;
+  }
   if (hasCommand(payload, "reset")) {
     return RoverCommand::Reset;
   }
@@ -43,6 +46,8 @@ const char* roverCommandName(RoverCommand command) {
       return "verify";
     case RoverCommand::RunRoute:
       return "run_route";
+    case RoverCommand::Explore:
+      return "explore";
     case RoverCommand::Stop:
       return "stop";
     case RoverCommand::Reset:

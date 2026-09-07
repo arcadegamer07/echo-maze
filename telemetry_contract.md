@@ -4,15 +4,17 @@
 
 The ESP32 opens a WebSocket connection to `ws://<laptop-ip>:8765`. It sends
 one UTF-8 JSON object per WebSocket message at approximately 10 Hz. The laptop
-receiver also relays dashboard commands (`learn`, `verify`, `stop`, `reset`,
+receiver also relays dashboard commands (`learn`, `verify`, `explore`, `stop`, `reset`,
 `run_route`) to the connected ESP32 and broadcasts accepted telemetry to
 dashboard clients. It replies with a small acknowledgement after accepting or
 rejecting a frame.
 
 Use `mode: "test"` with `source: "fixture"` for connectivity checks before
 all sensors are wired. Test packets are never used to build a baseline, map,
-or ML model. Use `mode: "learn"` or `mode: "verify"` only for real rover
-readings, with `source: "live"`.
+or ML model. Use `mode: "learn"`, `mode: "verify"`, or `mode: "explore"` only
+for real rover readings, with `source: "live"`. `explore` is the bounded,
+sensor-guarded unknown-area survey: it is mappable live evidence, but it is
+not used to train the baseline anomaly model.
 
 ## Canonical packet
 
@@ -47,7 +49,7 @@ telemetry.
 | Field | Type | Unit / meaning |
 |---|---|---|
 | `timestamp` | number | Milliseconds since ESP32 boot. It must increase during a run. |
-| `mode` | string | `test`, `learn`, or `verify`. `test` is never baseline data. |
+| `mode` | string | `test`, `learn`, `verify`, or `explore`. `test` is never map/baseline data. |
 | `source` | string | `fixture` for a simulated test; `live` for real rover readings. |
 | `motor.left_speed`, `motor.right_speed` | number | Signed PWM command, convention agreed with firmware. |
 | `motor.duration_ms` | number | Duration of the active command. |

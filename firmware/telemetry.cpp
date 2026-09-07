@@ -37,6 +37,8 @@ const char* telemetryModeName(TelemetryMode mode) {
       return "learn";
     case TelemetryMode::Verify:
       return "verify";
+    case TelemetryMode::Explore:
+      return "explore";
     case TelemetryMode::Test:
     default:
       return "test";

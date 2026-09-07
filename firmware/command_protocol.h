@@ -7,6 +7,7 @@ enum class RoverCommand : uint8_t {
   Learn,
   Verify,
   RunRoute,
+  Explore,
   Stop,
   Reset,
 };
