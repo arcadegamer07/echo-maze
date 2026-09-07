@@ -29,12 +29,13 @@ Servo turretServo;
 Adafruit_SSD1306 oled(128, 64, &Wire, -1);
 bool oledReady = false;
 // The servo horn was mounted so that write(90) points straight ahead. Keep
-// the ultrasonic head within a tiny 85--95° micro-sweep: wider angles make
-// the sensor body/arm reach the IR LED and breadboard on this chassis.
+// the ultrasonic head within a front-facing 75--105° sweep: wider angles make
+// the sensor body/arm reach the IR LED and breadboard on this chassis. Each
+// movement is 15° (75° -> 90° -> 105°).
 constexpr uint8_t kServoForwardDeg = 90;
-constexpr uint8_t kScanStartDeg = 85;
-constexpr uint8_t kScanEndDeg = 95;
-constexpr uint8_t kScanStepDeg = 5;
+constexpr uint8_t kScanStartDeg = 75;
+constexpr uint8_t kScanEndDeg = 105;
+constexpr uint8_t kScanStepDeg = 15;
 constexpr uint8_t kScanSampleCount =
     static_cast<uint8_t>((kScanEndDeg - kScanStartDeg) / kScanStepDeg + 1);
 uint8_t scanIndex = 0;

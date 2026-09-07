@@ -59,7 +59,7 @@ telemetry.
 | `ir`, `temp_c` | number or `null` | Raw IR value; temperature in °C. |
 
 The assembled rover currently reports ultrasonic samples in the safe
-front-facing micro-window **85°, 90°, 95°**. The wider positions are
+front-facing window **75°, 90°, 105°** (15° steps). The wider positions are
 intentionally excluded because this particular servo mount lets the ultrasonic
 head/arm reach the IR LED and breadboard. The schema still accepts the full
 0–180° range for compatibility with future mounts.
