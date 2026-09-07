@@ -1,6 +1,6 @@
 export type SocketStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
 export type TelemetryMessage = Record<string, unknown> & { run_id?: string; mode?: string; timestamp?: number };
-export type DashboardCommand = 'learn' | 'verify' | 'stop' | 'reset' | 'run_route';
+export type DashboardCommand = 'learn' | 'verify' | 'stop' | 'reset' | 'run_route' | 'explore';
 export const DEFAULT_TELEMETRY_URL = (import.meta.env.VITE_TELEMETRY_URL as string | undefined) ?? 'ws://127.0.0.1:8765';
 
 type StatusListener = (status: SocketStatus) => void;
@@ -43,7 +43,8 @@ export class EchoMazeSocket {
       this.socket.onmessage = (event) => {
         try {
           const message = JSON.parse(String(event.data));
-          if (message && typeof message === 'object' && !Array.isArray(message)) {
+          if (message && typeof message === 'object' && !Array.isArray(message)
+            && typeof message.run_id === 'string' && message.motor && message.scan) {
             this.telemetryListeners.forEach((listener) => listener(message as TelemetryMessage));
           }
         } catch {
@@ -55,9 +56,9 @@ export class EchoMazeSocket {
     }
   }
 
-  send(command: DashboardCommand) {
+  send(command: DashboardCommand, payload: Record<string, unknown> = {}) {
     if (this.socket?.readyState !== WebSocket.OPEN) return false;
-    this.socket.send(JSON.stringify({ cmd: command, source: 'echo-maze-dashboard' }));
+    this.socket.send(JSON.stringify({ cmd: command, source: 'echo-maze-dashboard', ...payload }));
     return true;
   }
 

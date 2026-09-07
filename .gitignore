@@ -58,6 +58,7 @@ __pycache__/
 # Generated telemetry data
 data/runs/*.jsonl
 data/runs/*.csv
+data/runs/*.log
 data/baseline/*.joblib
 data/baseline/*.json
 

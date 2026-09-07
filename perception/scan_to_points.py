@@ -35,12 +35,22 @@ def _reading_values(reading: Mapping[str, Any] | Sequence[float]) -> tuple[float
     return float(angle), None if distance is None else float(distance)
 
 
-def scan_to_local_point(angle_deg: float, distance_cm: float) -> tuple[float, float]:
-    """Return ``(x, y)`` in the rover frame for one valid reading."""
+def scan_to_local_point(
+    angle_deg: float,
+    distance_cm: float,
+    *,
+    servo_center_deg: float = 0.0,
+) -> tuple[float, float]:
+    """Return ``(x, y)`` in the rover frame for one valid reading.
+
+    The legacy helper treats 0° as the forward axis.  The Echo-Maze servo
+    contract uses a 0--180° turret where 90° is forward, so production calls
+    should pass ``servo_center_deg=90``.
+    """
 
     if distance_cm < 0 or not math.isfinite(float(distance_cm)):
         raise ValueError("distance_cm must be a finite non-negative number")
-    angle_rad = math.radians(float(angle_deg))
+    angle_rad = math.radians(float(angle_deg) - float(servo_center_deg))
     return distance_cm * math.cos(angle_rad), distance_cm * math.sin(angle_rad)
 
 
@@ -59,7 +69,7 @@ def local_to_world_point(
     )
 
 
-def scan_to_world_point(*args: Any) -> tuple[float, float]:
+def scan_to_world_point(*args: Any, servo_center_deg: float = 0.0) -> tuple[float, float]:
     """Convert one contract reading to a world point.
 
     Preferred form is ``scan_to_world_point(pose, angle_deg, distance_cm)``.
@@ -75,7 +85,12 @@ def scan_to_world_point(*args: Any) -> tuple[float, float]:
         pose = (float(robot_x), float(robot_y), float(robot_theta))
     else:
         raise TypeError("expected (pose, angle_deg, distance_cm) or five legacy values")
-    return local_to_world_point(*scan_to_local_point(float(angle_deg), float(distance_cm)), pose)
+    return local_to_world_point(
+        *scan_to_local_point(
+            float(angle_deg), float(distance_cm), servo_center_deg=servo_center_deg
+        ),
+        pose,
+    )
 
 
 def scan_to_points(
@@ -83,6 +98,7 @@ def scan_to_points(
     pose: Pose | Mapping[str, Any] | Sequence[float],
     *,
     max_distance_cm: float | None = None,
+    servo_center_deg: float = 0.0,
 ) -> list[tuple[float, float]]:
     """Convert all valid readings from a sweep into world ``(x, y)`` points.
 
@@ -105,7 +121,11 @@ def scan_to_points(
                 continue
             if max_distance_cm is not None and distance > max_distance_cm:
                 continue
-            points.append(scan_to_world_point(pose, angle, distance))
+            points.append(
+                scan_to_world_point(
+                    pose, angle, distance, servo_center_deg=servo_center_deg
+                )
+            )
         except (TypeError, ValueError):
             continue
     return points
@@ -126,8 +146,14 @@ def scan_to_point_records(
     pose: Pose | Mapping[str, Any] | Sequence[float],
     *,
     max_distance_cm: float | None = None,
+    servo_center_deg: float = 0.0,
 ) -> list[dict[str, float]]:
     """JSON-friendly version of :func:`scan_to_points`."""
 
-    points = scan_to_points(readings, pose, max_distance_cm=max_distance_cm)
+    points = scan_to_points(
+        readings,
+        pose,
+        max_distance_cm=max_distance_cm,
+        servo_center_deg=servo_center_deg,
+    )
     return [{"x_cm": float(x), "y_cm": float(y)} for x, y in points]

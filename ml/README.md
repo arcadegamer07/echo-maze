@@ -9,8 +9,9 @@ logs without changing the raw telemetry contract.
 
 1. The receiver stores one JSON object per line in `data/runs/<run_id>.jsonl`.
 2. `fft_features.py` groups packets into short overlapping windows and turns
-   each window into named numeric features (motion, motor balance, scan/IR/
-   temperature summaries, and a low-frequency acceleration spectrum).
+   each window into named gyro-free features (motor balance, scan/IR/
+   temperature summaries, validity fractions and range variation). Optional
+   IMU diagnostics are retained for future hardware but do not drive the model.
 3. `anomaly_model.py` imputes missing optional fields, scales the features, and
    fits an Isolation Forest to healthy `learn` windows.
 4. A later `verify` run is scored window by window. The result is a relative
@@ -35,6 +36,28 @@ python -m ml.pipeline verify `
   --output data/runs/verify-01.scores.jsonl
 ```
 
+## Bounded rover exploration
+
+The firmware also accepts a guarded exploratory command through the same
+receiver.  It is useful for a first hardware bring-up, but it is not a
+repeatable baseline route. Its `explore` telemetry is mappable for the live
+occupancy view but is intentionally excluded from model training; `test`
+telemetry remains connectivity-only:
+
+```powershell
+python -m ml.send_command explore --duration-ms 10000
+```
+
+The firmware clamps the requested duration to 30 seconds.  During the run it
+keeps the turret facing forward, checks the ultrasonic and IR obstacle inputs,
+reverses briefly and pivots when the path is blocked, then resumes forward
+motion.  A WebSocket disconnect or the deadline stops the motors.  Stop it
+manually with:
+
+```powershell
+python -m ml.send_command stop
+```
+
 The default window is 20 packets with a stride of 10, which is about two
 seconds at the current 10 Hz telemetry rate. A useful first baseline needs at
 least eight windows (roughly 90 packets). The command rejects `test` and
@@ -42,10 +65,9 @@ least eight windows (roughly 90 packets). The command rejects `test` and
 
 ## Current limits and next integration steps
 
-- The WebSocket stream is about 10 Hz. Its Nyquist limit is about 5 Hz, so the
-  FFT features are only low-frequency summaries. For real vibration analysis,
-  sample the IMU faster on the ESP32 and send window summaries or a higher-rate
-  stream.
+- The current MPU6050 is absent, so vibration/tilt evidence is unavailable and
+  must be described that way in a demo. If the board is repaired later, IMU
+  features can be re-enabled without changing the packet contract.
 - Missing scan, IR, and temperature values remain missing until the model's
   baseline imputer handles them. No fake sensor values are invented.
 - The current model detects unusual telemetry windows. The final decision

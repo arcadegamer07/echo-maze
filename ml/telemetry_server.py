@@ -19,6 +19,7 @@ from websockets.exceptions import ConnectionClosed
 
 
 SCHEMA_PATH = Path(__file__).parent / "schemas" / "telemetry.schema.json"
+CONNECTED_CLIENTS: set[ServerConnection] = set()
 
 
 def utc_now() -> str:
@@ -42,6 +43,7 @@ async def handle_connection(
 ) -> None:
     remote = websocket.remote_address
     sender_ip = remote[0] if remote else "unknown"
+    CONNECTED_CLIENTS.add(websocket)
     try:
         async for raw_message in websocket:
             try:
@@ -51,6 +53,31 @@ async def handle_connection(
             except (json.JSONDecodeError, ValueError) as error:
                 await websocket.send(json.dumps({"ok": False, "error": str(error)}))
                 print(f"Dropped malformed packet from {sender_ip}: {error}")
+                continue
+
+            # Dashboard control commands share this socket but are not
+            # telemetry packets. Relay them to the ESP32 client(s).
+            command = packet.get("cmd") if isinstance(packet, dict) else None
+            if isinstance(command, str):
+                if command not in {"learn", "verify", "stop", "reset", "run_route", "explore"}:
+                    await websocket.send(json.dumps({"ok": False, "error": "unknown command"}))
+                    continue
+                delivered = 0
+                for client in list(CONNECTED_CLIENTS):
+                    if client is websocket:
+                        continue
+                    try:
+                        await client.send(json.dumps(packet, separators=(",", ":")))
+                        delivered += 1
+                    except ConnectionClosed:
+                        CONNECTED_CLIENTS.discard(client)
+                await websocket.send(json.dumps({"ok": delivered > 0, "cmd": command, "delivered_to": delivered}))
+                print(f"Relayed command {command!r} from {sender_ip} to {delivered} client(s)")
+                continue
+
+            # ESP32 acknowledgements are informational frames, not contract
+            # packets. Ignore them instead of creating a feedback loop.
+            if set(packet).issubset({"ok", "message", "cmd", "delivered_to"}) and "run_id" not in packet:
                 continue
 
             errors = sorted(validator.iter_errors(packet), key=lambda error: list(error.path))
@@ -65,6 +92,13 @@ async def handle_connection(
             destination = log_path(output_dir, packet["run_id"])
             with destination.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(packet, separators=(",", ":")) + "\n")
+            for client in list(CONNECTED_CLIENTS):
+                if client is websocket:
+                    continue
+                try:
+                    await client.send(json.dumps(packet, separators=(",", ":")))
+                except ConnectionClosed:
+                    CONNECTED_CLIENTS.discard(client)
             await websocket.send(json.dumps({"ok": True, "run_id": packet["run_id"]}))
             print(
                 f"[{packet['mode']}] {packet['run_id']} t={packet['timestamp']} "
@@ -75,6 +109,8 @@ async def handle_connection(
             f"Connection from {sender_ip} closed before a complete WebSocket close "
             f"(code={error.code}). Server is still listening."
         )
+    finally:
+        CONNECTED_CLIENTS.discard(websocket)
 
 
 async def run_server(host: str, port: int, output_dir: Path) -> None:

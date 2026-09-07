@@ -1,85 +1,411 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <Wire.h>
 #include <WebSocketsClient.h>
+#include <ESP32Servo.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
 #include "secrets.h"
+#include "hardware_config.h"
+#include "health.h"
+#include "motor_control.h"
+#include "sensors.h"
 #include "telemetry.h"
 
 WebSocketsClient webSocket;
+MotorController motorController;
+SensorSuite sensorSuite;
+SafetySupervisor safety;
 bool webSocketConnected = false;
+bool sensorSuiteReady = false;
+uint32_t lastWebSocketActivityMs = 0;
+uint32_t lastTelemetryMs = 0;
+int16_t commandedLeft = 0;
+int16_t commandedRight = 0;
+uint32_t commandDurationMs = 0;
+String activeRunId;
+Servo turretServo;
+Adafruit_SSD1306 oled(128, 64, &Wire, -1);
+bool oledReady = false;
+uint8_t scanIndex = 0;
+TelemetryMode activeMode = TelemetryMode::Test;
+bool routeActive = false;
+uint8_t routeStep = 0;
+uint32_t routeStepStartedMs = 0;
+
+// Operator-controlled exploration is deliberately separate from the
+// repeatable learn/verify route.  It is a bounded, sensor-guarded wander mode
+// for bringing up the assembled rover without allowing an unbounded command
+// to drive the motors.
+enum class ExplorePhase : uint8_t { Forward, Reverse, Turn };
+bool exploreActive = false;
+ExplorePhase explorePhase = ExplorePhase::Forward;
+uint32_t exploreDeadlineMs = 0;
+uint32_t explorePhaseStartedMs = 0;
+uint32_t lastExploreCheckMs = 0;
+uint8_t exploreInvalidDistanceReads = 0;
+bool exploreTurnRight = true;
+
+constexpr uint32_t kExploreMaxDurationMs = 30000UL;
+constexpr uint32_t kExploreDefaultDurationMs = 10000UL;
+constexpr uint32_t kExploreCheckPeriodMs = 120UL;
+constexpr uint32_t kExploreReverseMs = 400UL;
+constexpr uint32_t kExploreTurnMs = 560UL;
+// TT gear motors often spin unloaded at ~25% duty but cannot break static
+// friction once the rover is on the floor. These values stay moderate while
+// providing enough starting torque from the 5 V motor supply.
+constexpr int16_t kExploreForwardSpeed = 200;
+constexpr int16_t kExploreReverseSpeed = -185;
+constexpr int16_t kExploreTurnSpeed = 190;
+constexpr float kExploreObstacleCm = 22.0f;
+constexpr uint8_t kExploreInvalidReadLimit = 3;
+
+struct RouteStep { int16_t left; int16_t right; uint32_t durationMs; };
+// A bounded, repeatable moving survey. The initial stationary window lets the
+// servo/sensors settle, then Learn and Verify execute this identical route.
+// Higher PWM over shorter bursts supplies loaded-wheel starting torque without
+// increasing the approximate travel distance of the earlier low-PWM route.
+const RouteStep kRoute[] = {
+    {0, 0, 700},
+    {200, 200, 600}, {0, 0, 450}, {190, -190, 330}, {0, 0, 450},
+    {200, 200, 600}, {0, 0, 450}, {190, -190, 330}, {0, 0, 450},
+    {200, 200, 600}, {0, 0, 450}, {190, 190, 330}, {0, 0, 450},
+    {200, 200, 600}, {0, 0, 450}, {190, 190, 330}, {0, 0, 450},
+    {-185, -185, 420}, {0, 0, 600}, {190, -190, 330}, {0, 0, 650},
+};
+constexpr uint8_t kRouteLength = sizeof(kRoute) / sizeof(kRoute[0]);
+
+void showStatus(const char* title, const char* detail = nullptr) {
+  if (!oledReady) return;
+  oled.clearDisplay(); oled.setTextColor(SSD1306_WHITE); oled.setTextSize(1);
+  oled.setCursor(0, 0); oled.println("ECHO-MAZE");
+  oled.setTextSize(2); oled.setCursor(0, 16); oled.println(title);
+  oled.setTextSize(1); oled.setCursor(0, 48);
+  if (detail) oled.println(detail);
+  oled.display();
+}
+
+void stopRover(const char* reason) {
+  motorController.stop();
+  commandedLeft = 0;
+  commandedRight = 0;
+  commandDurationMs = 0;
+  routeActive = false;
+  exploreActive = false;
+  showStatus("STOPPED", reason);
+  Serial.print("ROVER STOPPED: ");
+  Serial.println(reason);
+}
+
+void setMotors(int16_t left, int16_t right, uint32_t durationMs) {
+  commandedLeft = left;
+  commandedRight = right;
+  commandDurationMs = durationMs;
+  motorController.setSpeeds(left, right);
+}
+
+void sendAck(bool ok, const char* message) {
+  if (!webSocketConnected) return;
+  String ack = String("{\"ok\":") + (ok ? "true" : "false") +
+               ",\"message\":\"" + message + "\"}";
+  webSocket.sendTXT(ack);
+}
+
+void startRun(TelemetryMode mode) {
+  exploreActive = false;
+  activeMode = mode;
+  activeRunId = String(mode == TelemetryMode::Learn ? "learn-" : "verify-") + String(millis());
+  routeActive = true;
+  routeStep = 0;
+  routeStepStartedMs = millis();
+  scanIndex = 0;
+  setMotors(kRoute[0].left, kRoute[0].right, kRoute[0].durationMs);
+  showStatus(mode == TelemetryMode::Learn ? "LEARN" : "VERIFY", "route active");
+  Serial.print("Run started: "); Serial.println(activeRunId);
+  sendAck(true, mode == TelemetryMode::Learn ? "learn started" : "verify started");
+}
+
+uint32_t exploreDurationFromCommand(const String& payload) {
+  uint32_t durationMs = kExploreDefaultDurationMs;
+  const int keyAt = payload.indexOf("\"duration_ms\"");
+  if (keyAt >= 0) {
+    const int colonAt = payload.indexOf(':', keyAt);
+    if (colonAt >= 0) {
+      const long requested = payload.substring(colonAt + 1).toInt();
+      if (requested > 0) {
+        durationMs = static_cast<uint32_t>(requested);
+      }
+    }
+  }
+  if (durationMs > kExploreMaxDurationMs) {
+    durationMs = kExploreMaxDurationMs;
+  }
+  return durationMs;
+}
+
+void startExplore(uint32_t durationMs) {
+  // Stop a previous route before entering exploration.  The command is still
+  // bounded by a hard 30-second deadline even if the caller requests more.
+  routeActive = false;
+  motorController.stop();
+  commandedLeft = 0;
+  commandedRight = 0;
+  commandDurationMs = 0;
+  // Exploration is real sensor data, not a connectivity fixture. Keep
+  // mode=test reserved for the serial `p` fixture packet so the live map can
+  // consume explore frames safely.
+  activeMode = TelemetryMode::Explore;
+  activeRunId = String("explore-") + String(millis());
+  exploreActive = true;
+  explorePhase = ExplorePhase::Forward;
+  explorePhaseStartedMs = millis();
+  exploreDeadlineMs = explorePhaseStartedMs + durationMs;
+  lastExploreCheckMs = explorePhaseStartedMs;
+  exploreInvalidDistanceReads = 0;
+  setMotors(kExploreForwardSpeed, kExploreForwardSpeed, 0);
+  // Keep the turret facing forward while the rover is moving.  The original
+  // 0..180 degree sweep remains unchanged for learn/verify runs, but sweeping
+  // into the chassis during free exploration is unsafe.
+  turretServo.write(90);
+  showStatus("EXPLORE", "forward / guarded");
+  Serial.print("Explore started for ");
+  Serial.print(durationMs);
+  Serial.println(" ms");
+  sendAck(true, "explore started");
+}
+
+void beginExploreAvoidance(uint32_t now, const char* reason) {
+  explorePhase = ExplorePhase::Reverse;
+  explorePhaseStartedMs = now;
+  exploreInvalidDistanceReads = 0;
+  setMotors(kExploreReverseSpeed, kExploreReverseSpeed, kExploreReverseMs);
+  showStatus("EXPLORE", "obstacle / reverse");
+  Serial.print("Explore avoidance: ");
+  Serial.println(reason);
+}
+
+void updateExplore(uint32_t now) {
+  if (!exploreActive) return;
+
+  if (static_cast<int32_t>(now - exploreDeadlineMs) >= 0) {
+    stopRover("explore complete");
+    sendAck(true, "explore complete");
+    return;
+  }
+
+  // A disconnect always wins over obstacle recovery.  Do not allow the
+  // rover to keep moving while the operator/dashboard is gone.
+  if (!webSocketConnected &&
+      now - lastWebSocketActivityMs >= 2000UL) {
+    stopRover("websocket heartbeat lost");
+    return;
+  }
+
+  if (explorePhase == ExplorePhase::Forward &&
+      now - lastExploreCheckMs >= kExploreCheckPeriodMs) {
+    lastExploreCheckMs = now;
+    SensorReadings readings;
+    sensorSuite.read(readings);
+    const bool irObstacle = readings.irValid && readings.ir < 0.5f;
+    if (!readings.distanceValid) {
+      if (exploreInvalidDistanceReads < 255U) ++exploreInvalidDistanceReads;
+    } else {
+      exploreInvalidDistanceReads = 0;
+    }
+    const bool ultrasonicObstacle =
+        (readings.distanceValid && readings.distanceCm <= kExploreObstacleCm) ||
+        exploreInvalidDistanceReads >= kExploreInvalidReadLimit;
+    if (irObstacle || ultrasonicObstacle) {
+      beginExploreAvoidance(now, irObstacle ? "IR obstacle" : "no road / ultrasonic blocked");
+      return;
+    }
+  }
+
+  if (explorePhase == ExplorePhase::Reverse &&
+      now - explorePhaseStartedMs >= kExploreReverseMs) {
+    explorePhase = ExplorePhase::Turn;
+    explorePhaseStartedMs = now;
+    exploreTurnRight = !exploreTurnRight;
+    setMotors(exploreTurnRight ? kExploreTurnSpeed : -kExploreTurnSpeed,
+              exploreTurnRight ? -kExploreTurnSpeed : kExploreTurnSpeed,
+              kExploreTurnMs);
+    showStatus("EXPLORE", exploreTurnRight ? "turn right" : "turn left");
+    return;
+  }
+
+  if (explorePhase == ExplorePhase::Turn &&
+      now - explorePhaseStartedMs >= kExploreTurnMs) {
+    explorePhase = ExplorePhase::Forward;
+    explorePhaseStartedMs = now;
+    lastExploreCheckMs = now;
+    exploreInvalidDistanceReads = 0;
+    setMotors(kExploreForwardSpeed, kExploreForwardSpeed, 0);
+    showStatus("EXPLORE", "forward / guarded");
+  }
+}
+
+void handleCommand(const String& payload) {
+  // Ignore receiver acknowledgements and any non-command frames. Without
+  // this guard an ACK would be echoed forever between the two endpoints.
+  if (payload.indexOf("\"cmd\"") < 0) return;
+  if (payload.indexOf("\"cmd\":\"stop\"") >= 0) {
+    stopRover("operator stop"); sendAck(true, "stopped"); return;
+  }
+  if (payload.indexOf("\"cmd\":\"reset\"") >= 0) {
+    stopRover("reset"); activeMode = TelemetryMode::Test; sendAck(true, "reset"); return;
+  }
+  if (payload.indexOf("\"cmd\":\"learn\"") >= 0) { startRun(TelemetryMode::Learn); return; }
+  if (payload.indexOf("\"cmd\":\"verify\"") >= 0) { startRun(TelemetryMode::Verify); return; }
+  if (payload.indexOf("\"cmd\":\"run_route\"") >= 0) { startRun(TelemetryMode::Learn); return; }
+  if (payload.indexOf("\"cmd\":\"explore\"") >= 0) {
+    startExplore(exploreDurationFromCommand(payload));
+    return;
+  }
+  sendAck(false, "unknown command");
+}
 
 void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
       webSocketConnected = false;
+      stopRover("websocket disconnected");
       Serial.println("WebSocket DISCONNECTED");
       break;
     case WStype_CONNECTED:
       webSocketConnected = true;
+      lastWebSocketActivityMs = millis();
+      showStatus("ONLINE", "receiver linked");
       Serial.println("WebSocket CONNECTED");
       break;
-    case WStype_TEXT:
-      Serial.print("Server reply: ");
-      Serial.write(payload, length);
-      Serial.println();
+    case WStype_TEXT: {
+      lastWebSocketActivityMs = millis();
+      String command;
+      for (size_t i = 0; i < length; ++i) command += static_cast<char>(payload[i]);
+      Serial.print("Command: "); Serial.println(command);
+      handleCommand(command);
       break;
-    case WStype_ERROR:
-      Serial.println("WebSocket ERROR");
-      break;
-    default:
-      break;
+    }
+    case WStype_ERROR: Serial.println("WebSocket ERROR"); break;
+    default: break;
   }
+}
+
+void sendTelemetry() {
+  if (!webSocketConnected || (!routeActive && !exploreActive)) return;
+  SensorReadings readings;
+  const uint8_t angle = exploreActive ? 90U : static_cast<uint8_t>(scanIndex * 15U);
+  turretServo.write(angle);
+  delay(60); // let the servo settle before the ultrasonic ping
+  sensorSuite.read(readings);
+  TelemetrySample sample;
+  sample.runId = activeRunId.c_str();
+  sample.timestampMs = millis();
+  sample.mode = activeMode;
+  sample.leftSpeed = commandedLeft;
+  sample.rightSpeed = commandedRight;
+  sample.motorDurationMs = commandDurationMs;
+  sample.scanAngleDeg = static_cast<float>(angle);
+  sample.distanceValid = readings.distanceValid;
+  sample.distanceCm = readings.distanceCm;
+  sample.imuValid = false; // MPU6050 is not installed in this build.
+  sample.irValid = readings.irValid;
+  sample.ir = readings.ir;
+  sample.tempValid = readings.tempValid;
+  sample.tempC = readings.tempC;
+  if (telemetrySampleValid(sample)) {
+    String packet = buildTelemetryJson(sample);
+    webSocket.sendTXT(packet);
+    lastWebSocketActivityMs = millis();
+  }
+  if (!exploreActive) {
+    scanIndex = static_cast<uint8_t>((scanIndex + 1U) % 13U);
+  }
+}
+
+void updateRoute(uint32_t now) {
+  if (!routeActive) return;
+  SensorReadings readings;
+  sensorSuite.read(readings);
+  HealthInputs inputs;
+  inputs.obstacleValid = readings.distanceValid;
+  inputs.obstacleDistanceCm = readings.distanceCm;
+  inputs.websocketConnected = webSocketConnected;
+  inputs.nowMs = now;
+  inputs.lastWebsocketActivityMs = lastWebSocketActivityMs;
+  if (safety.evaluate(inputs).shouldStop) { stopRover(safety.reason()); return; }
+  if (now - routeStepStartedMs < kRoute[routeStep].durationMs) return;
+  ++routeStep;
+  if (routeStep >= kRouteLength) { stopRover("route complete"); sendAck(true, "route complete"); return; }
+  routeStepStartedMs = now;
+  setMotors(kRoute[routeStep].left, kRoute[routeStep].right, kRoute[routeStep].durationMs);
 }
 
 void sendConnectivityTest() {
-  if (!webSocketConnected) {
-    Serial.println("Cannot send: WebSocket is not connected");
-    return;
-  }
-
+  if (!webSocketConnected) { Serial.println("Cannot send: WebSocket is not connected"); return; }
   TelemetrySample sample;
-  sample.runId = "connectivity-test-01";
-  sample.timestampMs = millis();
-  sample.mode = TelemetryMode::Test;
-  sample.scanAngleDeg = 90.0f;
-
-  Serial.println("Sending connectivity-test-01...");
+  sample.runId = "connectivity-test-01"; sample.timestampMs = millis();
+  sample.mode = TelemetryMode::Test; sample.scanAngleDeg = 90.0f;
   String packet = buildTelemetryJson(sample);
   webSocket.sendTXT(packet);
+  Serial.println("Sent connectivity-test-01 (fixture)");
+}
+
+void printI2cScan() {
+  Serial.println("I2C scan (SDA=21, SCL=22):"); uint8_t found = 0;
+  for (uint8_t address = 1; address < 127; ++address) {
+    Wire.beginTransmission(address); if (Wire.endTransmission() == 0) {
+      Serial.printf("  found 0x%02X\n", address); ++found;
+    }
+  }
+  if (!found) Serial.println("  no I2C devices found");
+}
+
+void printSnapshot() {
+  SensorReadings readings;
+  sensorSuite.read(readings);
+  Serial.printf("IMU: %s (gyro intentionally skipped)\n", readings.imuValid ? "available" : "not available");
+  Serial.printf("Ultrasonic: %s\n", readings.distanceValid ? String(readings.distanceCm, 2).c_str() : "no echo");
+  Serial.printf("IR raw: %s\n", readings.irValid ? String(readings.ir, 0).c_str() : "invalid");
+  Serial.printf("Temperature: %s\n", readings.tempValid ? String(readings.tempC, 2).c_str() : "not ready");
 }
 
 void setup() {
-  Serial.begin(115200);
-  delay(1000);
-
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ECHO_WIFI_SSID, ECHO_WIFI_PASSWORD);
-
+  Serial.begin(115200); delay(1000);
+  sensorSuiteReady = sensorSuite.begin();
+  motorController.begin();
+  oledReady = oled.begin(SSD1306_SWITCHCAPVCC, EchoAddresses::Oled);
+  showStatus("READY", "gyro-free mode");
+  turretServo.setPeriodHertz(50);
+  turretServo.attach(EchoPins::ServoSignal, 500, 2400);
+  turretServo.write(90);
+  Serial.println("Echo-Maze gyro-free firmware");
+  Serial.println(sensorSuite.imuAvailable() ? "MPU6050 detected (not used)" : "MPU6050 absent; using gyro-free mode");
+  WiFi.mode(WIFI_STA); WiFi.begin(ECHO_WIFI_SSID, ECHO_WIFI_PASSWORD);
   Serial.print("Connecting to hotspot");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println();
-  Serial.println("Wi-Fi connected");
-  Serial.print("ESP32 IP: ");
-  Serial.println(WiFi.localIP());
-  Serial.print("WebSocket target: ");
-  Serial.print(ECHO_RECEIVER_IP);
-  Serial.print(":");
-  Serial.println(ECHO_RECEIVER_PORT);
-
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print('.'); }
+  Serial.println(); Serial.print("Wi-Fi connected, ESP32 IP: "); Serial.println(WiFi.localIP());
   webSocket.begin(ECHO_RECEIVER_IP, ECHO_RECEIVER_PORT, "/");
-  webSocket.onEvent(webSocketEvent);
-  webSocket.setReconnectInterval(2000);
+  webSocket.onEvent(webSocketEvent); webSocket.setReconnectInterval(2000);
 }
 
 void loop() {
   webSocket.loop();
-
+  const uint32_t now = millis();
+  updateRoute(now);
+  updateExplore(now);
+  if ((routeActive || exploreActive) && now - lastTelemetryMs >= 100) {
+    lastTelemetryMs = now;
+    sendTelemetry();
+  }
   if (Serial.available()) {
-    if (Serial.read() == 'p') {
-      sendConnectivityTest();
-    }
+    const char command = Serial.read();
+    if (command == 'p') sendConnectivityTest();
+    else if (command == 'a') printI2cScan();
+    else if (command == 'm') motorController.runDiagnostic();
+    else if (command == 'i') printSnapshot();
+    else if (command == 's') stopRover("serial stop");
+    else if (command == 'l') startRun(TelemetryMode::Learn);
+    else if (command == 'v') startRun(TelemetryMode::Verify);
   }
 }

@@ -1,37 +1,36 @@
-# Firmware integration plan
+# Firmware integration status
 
-The firmware currently proves Wi-Fi/WebSocket connectivity with a fixture
-packet. The new small modules separate the pieces that can be tested now from
-the hardware-specific work that must wait for wiring.
+The ESP32 firmware is now a gyro-free, sensor-backed MVP. It keeps the TB6612
+driver stopped at boot, connects to the laptop receiver, accepts dashboard
+commands, and sends real telemetry at approximately 10 Hz during an explicit
+learn/verify route.
 
-## Modules ready for integration
+## Working path
 
-- `telemetry.h/.cpp`: one contract-safe sample structure and JSON serializer.
-  `learn` and `verify` samples are rejected by `telemetrySampleValid()` unless
-  they contain real IMU values. `test` automatically uses `source: "fixture"`.
-- `command_protocol.h/.cpp`: recognizes the dashboard's
-  `{"cmd":"learn"}`, `verify`, `stop`, `reset`, and `run_route` commands.
-- `route.h/.cpp`: deterministic iterator for a pre-programmed movement/scan
-  route. It performs no motor I/O itself.
-- `servo_scan.h/.cpp`: deterministic angle plan. The eventual servo driver
-  should wait `settleMs` (default 75 ms) before each ultrasonic ping.
-- `sensors.h/.cpp`: callback boundary for the actual IMU, IR, and temperature
-  libraries.
-- `health.h/.cpp`: safety supervisor for obstacle distance, tilt, current,
-  battery, and a lost WebSocket heartbeat. A `shouldStop` result must be acted
-  on before any queued route command.
+- `telemetry.h/.cpp`: contract-safe JSON; `imu: null` is valid in every mode.
+- `sensors.h/.cpp`: ultrasonic (GPIO 32/33), digital IR (GPIO 34), DHT11
+  (GPIO 4), and optional MPU6050 detection. Missing IMU is never faked.
+- `motor_control.h/.cpp`: bounded PWM drive plus a low-power diagnostic;
+  driver is in standby unless a command is active.
+- `main.ino`: WebSocket command handling, repeatable route, 15° servo sweep,
+  OLED status, 10 Hz telemetry, and obstacle/WebSocket emergency stop.
+- `health.h/.cpp`: obstacle and connection safety checks are evaluated before
+  advancing the route.
 
-## Hardware work still required
+## Commands
 
-1. Confirm the exact ESP32 board pins and sensor part numbers.
-2. Add the selected libraries (for example ESP32Servo, Adafruit MPU6050, and
-   the OLED library) to `platformio.ini` only after those choices are fixed.
-3. Implement callbacks in `sensors.cpp` and the actual servo/ultrasonic adapter.
-4. Make `main.ino` run one fixed route for both learn and verify modes.
-5. Call the safety supervisor every loop and immediately stop the motors on a
-   stop condition.
-6. Send one telemetry sample per reading, using a unique `run_id` and a
-   monotonic millisecond timestamp.
+The dashboard sends `{"cmd":"learn"}`, `verify`, `stop`, `reset`, or
+`run_route`. The laptop receiver relays commands to the ESP32 and broadcasts
+valid telemetry packets back to the dashboard. Serial commands remain useful:
+`p` fixture connectivity, `a` I²C scan, `i` sensor snapshot, `m` motor
+diagnostic, `l` learn, `v` verify, and `s` stop.
+
+## Honest limitation
+
+The current MPU6050 is not detected. Pose and ML therefore use wheel-command
+odometry plus ultrasonic/IR/temperature evidence; vibration and tilt are
+reported as unavailable. Reinstalling the IMU later only requires enabling its
+existing optional path.
 
 Do not commit `firmware/secrets.h`; it contains local Wi-Fi credentials and is
 already ignored by Git.

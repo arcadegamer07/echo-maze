@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from ml import telemetry_server
 from ml.telemetry_server import handle_connection, schema_validator
 
 
@@ -52,3 +53,14 @@ class TelemetryServerTests(unittest.TestCase):
         self.assertEqual(logged_packet["run_id"], "test-run-01")
         self.assertEqual(logged_packet["sender_ip"], "127.0.0.1")
         self.assertIn("received_at_utc", logged_packet)
+
+    def test_dashboard_command_is_relayed_to_other_client(self):
+        dashboard = FakeWebSocket([json.dumps({"cmd": "stop", "source": "dashboard"})])
+        esp32 = FakeWebSocket([])
+        telemetry_server.CONNECTED_CLIENTS.add(esp32)
+        try:
+            asyncio.run(handle_connection(dashboard, Path(tempfile.mkdtemp()), schema_validator()))
+        finally:
+            telemetry_server.CONNECTED_CLIENTS.discard(esp32)
+        self.assertEqual(dashboard.sent, [{"ok": True, "cmd": "stop", "delivered_to": 1}])
+        self.assertEqual(esp32.sent, [{"cmd": "stop", "source": "dashboard"}])

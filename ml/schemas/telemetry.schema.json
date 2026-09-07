@@ -7,7 +7,7 @@
   "properties": {
     "run_id": {"type": "string", "minLength": 1},
     "timestamp": {"type": "number", "minimum": 0},
-    "mode": {"type": "string", "enum": ["test", "learn", "verify"]},
+    "mode": {"type": "string", "enum": ["test", "learn", "verify", "explore"]},
     "source": {"type": "string", "enum": ["fixture", "live"]},
     "motor": {"type": "object", "additionalProperties": false, "required": ["left_speed", "right_speed", "duration_ms"], "properties": {"left_speed": {"type": "number"}, "right_speed": {"type": "number"}, "duration_ms": {"type": "number", "minimum": 0}}},
     "scan": {"type": "object", "additionalProperties": false, "required": ["angle", "distance_cm"], "properties": {"angle": {"type": "number", "minimum": 0, "maximum": 180}, "distance_cm": {"type": ["number", "null"], "minimum": 0}}},
@@ -17,6 +17,6 @@
   },
   "allOf": [
     {"if": {"properties": {"mode": {"const": "test"}}}, "then": {"properties": {"source": {"const": "fixture"}}}},
-    {"if": {"properties": {"mode": {"enum": ["learn", "verify"]}}}, "then": {"properties": {"source": {"const": "live"}, "imu": {"type": "object"}}}}
+    {"if": {"properties": {"mode": {"enum": ["learn", "verify", "explore"]}}}, "then": {"properties": {"source": {"const": "live"}}}}
   ]
 }

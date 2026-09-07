@@ -15,6 +15,7 @@ enum class TelemetryMode : uint8_t {
   Test,
   Learn,
   Verify,
+  Explore,
 };
 
 struct TelemetrySample {
@@ -44,7 +45,7 @@ const char* telemetryModeName(TelemetryMode mode);
 const char* telemetrySourceName(TelemetryMode mode);
 
 // Returns false when the sample would violate a basic contract invariant.
-// Learn/verify samples require real IMU values; test samples may omit them.
+// IMU is optional in every mode; a missing board is represented as JSON null.
 bool telemetrySampleValid(const TelemetrySample& sample);
 
 // Build one compact JSON object matching ml/schemas/telemetry.schema.json.

@@ -159,10 +159,22 @@ def structural_change_score(
 def score_checkpoint(
     *,
     geometry_score: float,
-    baseline_fingerprint: IMUFingerprint,
-    current_fingerprint: IMUFingerprint,
+    baseline_fingerprint: IMUFingerprint | None = None,
+    current_fingerprint: IMUFingerprint | None = None,
+    baseline_temperature_c: float | None = None,
+    current_temperature_c: float | None = None,
 ) -> StructuralScore:
-    deviations = fingerprint_deviations(baseline_fingerprint, current_fingerprint)
+    """Score one checkpoint, with an honest gyro-free fallback.
+
+    When no IMU is installed, tilt and vibration are reported as zero evidence
+    rather than fabricated measurements. Temperature may still contribute if
+    both checkpoint temperatures are available.
+    """
+    if baseline_fingerprint is not None and current_fingerprint is not None:
+        deviations = fingerprint_deviations(baseline_fingerprint, current_fingerprint)
+    else:
+        thermal = _relative_deviation(current_temperature_c, baseline_temperature_c, 3.0)
+        deviations = {"tilt": 0.0, "vibration": 0.0, "thermal": thermal}
     return structural_change_score(
         geometry=geometry_score,
         tilt=deviations["tilt"],

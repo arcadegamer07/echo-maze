@@ -25,7 +25,7 @@ export function TelemetryPanel({ telemetry, connected, packetCount, source }: { 
         </div>
         <div className="telemetry-detail-grid">
           <div><span>IMU / ACCEL</span><strong>{telemetry.accel}</strong></div>
-          <div><span>IMU / GYRO</span><strong>{telemetry.gyro}</strong></div>
+          <div><span>IMU / GYRO</span><strong>{telemetry.gyro === 'Unavailable' ? 'Not installed' : telemetry.gyro}</strong></div>
           <div><span>IR REFLECTANCE</span><strong>{telemetry.ir} raw</strong></div>
           <div><span>PACKET SOURCE</span><strong>{source}</strong></div>
         </div>
