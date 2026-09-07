@@ -59,7 +59,7 @@ async def handle_connection(
             # telemetry packets. Relay them to the ESP32 client(s).
             command = packet.get("cmd") if isinstance(packet, dict) else None
             if isinstance(command, str):
-                if command not in {"learn", "verify", "stop", "reset", "run_route"}:
+                if command not in {"learn", "verify", "stop", "reset", "run_route", "explore"}:
                     await websocket.send(json.dumps({"ok": False, "error": "unknown command"}))
                     continue
                 delivered = 0

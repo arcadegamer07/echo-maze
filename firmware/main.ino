@@ -34,6 +34,30 @@ bool routeActive = false;
 uint8_t routeStep = 0;
 uint32_t routeStepStartedMs = 0;
 
+// Operator-controlled exploration is deliberately separate from the
+// repeatable learn/verify route.  It is a bounded, sensor-guarded wander mode
+// for bringing up the assembled rover without allowing an unbounded command
+// to drive the motors.
+enum class ExplorePhase : uint8_t { Forward, Reverse, Turn };
+bool exploreActive = false;
+ExplorePhase explorePhase = ExplorePhase::Forward;
+uint32_t exploreDeadlineMs = 0;
+uint32_t explorePhaseStartedMs = 0;
+uint32_t lastExploreCheckMs = 0;
+uint8_t exploreInvalidDistanceReads = 0;
+bool exploreTurnRight = true;
+
+constexpr uint32_t kExploreMaxDurationMs = 30000UL;
+constexpr uint32_t kExploreDefaultDurationMs = 10000UL;
+constexpr uint32_t kExploreCheckPeriodMs = 120UL;
+constexpr uint32_t kExploreReverseMs = 550UL;
+constexpr uint32_t kExploreTurnMs = 850UL;
+constexpr int16_t kExploreForwardSpeed = 65;
+constexpr int16_t kExploreReverseSpeed = -55;
+constexpr int16_t kExploreTurnSpeed = 60;
+constexpr float kExploreObstacleCm = 22.0f;
+constexpr uint8_t kExploreInvalidReadLimit = 3;
+
 struct RouteStep { int16_t left; int16_t right; uint32_t durationMs; };
 // A deliberately slow, repeatable zig-zag route. Commands are explicit and
 // the rover remains stopped until the dashboard sends learn or verify. The
@@ -64,6 +88,7 @@ void stopRover(const char* reason) {
   commandedRight = 0;
   commandDurationMs = 0;
   routeActive = false;
+  exploreActive = false;
   showStatus("STOPPED", reason);
   Serial.print("ROVER STOPPED: ");
   Serial.println(reason);
@@ -84,6 +109,7 @@ void sendAck(bool ok, const char* message) {
 }
 
 void startRun(TelemetryMode mode) {
+  exploreActive = false;
   activeMode = mode;
   activeRunId = String(mode == TelemetryMode::Learn ? "learn-" : "verify-") + String(millis());
   routeActive = true;
@@ -94,6 +120,122 @@ void startRun(TelemetryMode mode) {
   showStatus(mode == TelemetryMode::Learn ? "LEARN" : "VERIFY", "route active");
   Serial.print("Run started: "); Serial.println(activeRunId);
   sendAck(true, mode == TelemetryMode::Learn ? "learn started" : "verify started");
+}
+
+uint32_t exploreDurationFromCommand(const String& payload) {
+  uint32_t durationMs = kExploreDefaultDurationMs;
+  const int keyAt = payload.indexOf("\"duration_ms\"");
+  if (keyAt >= 0) {
+    const int colonAt = payload.indexOf(':', keyAt);
+    if (colonAt >= 0) {
+      const long requested = payload.substring(colonAt + 1).toInt();
+      if (requested > 0) {
+        durationMs = static_cast<uint32_t>(requested);
+      }
+    }
+  }
+  if (durationMs > kExploreMaxDurationMs) {
+    durationMs = kExploreMaxDurationMs;
+  }
+  return durationMs;
+}
+
+void startExplore(uint32_t durationMs) {
+  // Stop a previous route before entering exploration.  The command is still
+  // bounded by a hard 30-second deadline even if the caller requests more.
+  routeActive = false;
+  motorController.stop();
+  commandedLeft = 0;
+  commandedRight = 0;
+  commandDurationMs = 0;
+  activeMode = TelemetryMode::Test;
+  activeRunId = String("explore-") + String(millis());
+  exploreActive = true;
+  explorePhase = ExplorePhase::Forward;
+  explorePhaseStartedMs = millis();
+  exploreDeadlineMs = explorePhaseStartedMs + durationMs;
+  lastExploreCheckMs = explorePhaseStartedMs;
+  exploreInvalidDistanceReads = 0;
+  setMotors(kExploreForwardSpeed, kExploreForwardSpeed, 0);
+  // Keep the turret facing forward while the rover is moving.  The original
+  // 0..180 degree sweep remains unchanged for learn/verify runs, but sweeping
+  // into the chassis during free exploration is unsafe.
+  turretServo.write(90);
+  showStatus("EXPLORE", "forward / guarded");
+  Serial.print("Explore started for ");
+  Serial.print(durationMs);
+  Serial.println(" ms");
+  sendAck(true, "explore started");
+}
+
+void beginExploreAvoidance(uint32_t now, const char* reason) {
+  explorePhase = ExplorePhase::Reverse;
+  explorePhaseStartedMs = now;
+  exploreInvalidDistanceReads = 0;
+  setMotors(kExploreReverseSpeed, kExploreReverseSpeed, kExploreReverseMs);
+  showStatus("EXPLORE", "obstacle / reverse");
+  Serial.print("Explore avoidance: ");
+  Serial.println(reason);
+}
+
+void updateExplore(uint32_t now) {
+  if (!exploreActive) return;
+
+  if (static_cast<int32_t>(now - exploreDeadlineMs) >= 0) {
+    stopRover("explore complete");
+    sendAck(true, "explore complete");
+    return;
+  }
+
+  // A disconnect always wins over obstacle recovery.  Do not allow the
+  // rover to keep moving while the operator/dashboard is gone.
+  if (!webSocketConnected &&
+      now - lastWebSocketActivityMs >= 2000UL) {
+    stopRover("websocket heartbeat lost");
+    return;
+  }
+
+  if (explorePhase == ExplorePhase::Forward &&
+      now - lastExploreCheckMs >= kExploreCheckPeriodMs) {
+    lastExploreCheckMs = now;
+    SensorReadings readings;
+    sensorSuite.read(readings);
+    const bool irObstacle = readings.irValid && readings.ir < 0.5f;
+    if (!readings.distanceValid) {
+      if (exploreInvalidDistanceReads < 255U) ++exploreInvalidDistanceReads;
+    } else {
+      exploreInvalidDistanceReads = 0;
+    }
+    const bool ultrasonicObstacle =
+        (readings.distanceValid && readings.distanceCm <= kExploreObstacleCm) ||
+        exploreInvalidDistanceReads >= kExploreInvalidReadLimit;
+    if (irObstacle || ultrasonicObstacle) {
+      beginExploreAvoidance(now, irObstacle ? "IR obstacle" : "no road / ultrasonic blocked");
+      return;
+    }
+  }
+
+  if (explorePhase == ExplorePhase::Reverse &&
+      now - explorePhaseStartedMs >= kExploreReverseMs) {
+    explorePhase = ExplorePhase::Turn;
+    explorePhaseStartedMs = now;
+    exploreTurnRight = !exploreTurnRight;
+    setMotors(exploreTurnRight ? kExploreTurnSpeed : -kExploreTurnSpeed,
+              exploreTurnRight ? -kExploreTurnSpeed : kExploreTurnSpeed,
+              kExploreTurnMs);
+    showStatus("EXPLORE", exploreTurnRight ? "turn right" : "turn left");
+    return;
+  }
+
+  if (explorePhase == ExplorePhase::Turn &&
+      now - explorePhaseStartedMs >= kExploreTurnMs) {
+    explorePhase = ExplorePhase::Forward;
+    explorePhaseStartedMs = now;
+    lastExploreCheckMs = now;
+    exploreInvalidDistanceReads = 0;
+    setMotors(kExploreForwardSpeed, kExploreForwardSpeed, 0);
+    showStatus("EXPLORE", "forward / guarded");
+  }
 }
 
 void handleCommand(const String& payload) {
@@ -109,6 +251,10 @@ void handleCommand(const String& payload) {
   if (payload.indexOf("\"cmd\":\"learn\"") >= 0) { startRun(TelemetryMode::Learn); return; }
   if (payload.indexOf("\"cmd\":\"verify\"") >= 0) { startRun(TelemetryMode::Verify); return; }
   if (payload.indexOf("\"cmd\":\"run_route\"") >= 0) { startRun(TelemetryMode::Learn); return; }
+  if (payload.indexOf("\"cmd\":\"explore\"") >= 0) {
+    startExplore(exploreDurationFromCommand(payload));
+    return;
+  }
   sendAck(false, "unknown command");
 }
 
@@ -139,9 +285,9 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
 }
 
 void sendTelemetry() {
-  if (!webSocketConnected || activeMode == TelemetryMode::Test) return;
+  if (!webSocketConnected || (!routeActive && !exploreActive)) return;
   SensorReadings readings;
-  const uint8_t angle = static_cast<uint8_t>(scanIndex * 15U);
+  const uint8_t angle = exploreActive ? 90U : static_cast<uint8_t>(scanIndex * 15U);
   turretServo.write(angle);
   delay(60); // let the servo settle before the ultrasonic ping
   sensorSuite.read(readings);
@@ -165,7 +311,9 @@ void sendTelemetry() {
     webSocket.sendTXT(packet);
     lastWebSocketActivityMs = millis();
   }
-  scanIndex = static_cast<uint8_t>((scanIndex + 1U) % 13U);
+  if (!exploreActive) {
+    scanIndex = static_cast<uint8_t>((scanIndex + 1U) % 13U);
+  }
 }
 
 void updateRoute(uint32_t now) {
@@ -238,7 +386,11 @@ void loop() {
   webSocket.loop();
   const uint32_t now = millis();
   updateRoute(now);
-  if (routeActive && now - lastTelemetryMs >= 100) { lastTelemetryMs = now; sendTelemetry(); }
+  updateExplore(now);
+  if ((routeActive || exploreActive) && now - lastTelemetryMs >= 100) {
+    lastTelemetryMs = now;
+    sendTelemetry();
+  }
   if (Serial.available()) {
     const char command = Serial.read();
     if (command == 'p') sendConnectivityTest();

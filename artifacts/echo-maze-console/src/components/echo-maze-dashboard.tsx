@@ -178,7 +178,7 @@ function Overview({ state, progress, connected, liveTelemetry, packetCount, onCo
   connected: boolean;
   liveTelemetry: ReturnType<typeof parseLiveTelemetry> | null;
   packetCount: number;
-  onCommand: (command: 'learn' | 'verify' | 'stop' | 'reset') => void;
+  onCommand: (command: 'learn' | 'verify' | 'explore' | 'stop' | 'reset', durationMs?: number) => void;
   onView: (view: View) => void;
   ghostOn: boolean;
   onToggleGhost: () => void;
@@ -193,7 +193,7 @@ function Overview({ state, progress, connected, liveTelemetry, packetCount, onCo
         <Panel title="Environment reconstruction" code="10 CM / LOG-ODDS GRID" className="map-panel">
           <PanelBody className="map-panel-body">
             <div className="map-toolbar">
-              <span className="status-chip"><i />{connected ? 'Live range trace below' : state === 'LEARNING' || state === 'VERIFYING' ? 'Acquiring geometry' : 'Reference map preview'}</span>
+              <span className="status-chip"><i />{connected ? 'Live range trace below' : state === 'LEARNING' || state === 'VERIFYING' || state === 'EXPLORING' ? 'Acquiring geometry' : 'Reference map preview'}</span>
               <span className="toolbar-muted">16 × 10 cells / route 01</span>
               <button className="ghost-button" onClick={onToggleGhost}>{ghostOn ? 'Baseline visible' : 'Show baseline'}</button>
             </div>
@@ -218,7 +218,7 @@ function Overview({ state, progress, connected, liveTelemetry, packetCount, onCo
       </div>
       <LiveTraceView state={liveMap} connected={connected} />
       <div className="overview-lower">
-        <PointCloudView points={points} pose={pose} scanning={state === 'LEARNING' || state === 'VERIFYING'} />
+        <PointCloudView points={points} pose={pose} scanning={state === 'LEARNING' || state === 'VERIFYING' || state === 'EXPLORING'} />
         <TelemetryPanel telemetry={visibleTelemetry} connected={connected} packetCount={packetCount} source={liveTelemetry ? 'ESP32 / live' : 'Recorded fixture'} />
       </div>
       <div className="overview-facts"><RunFacts /><EvidencePulse /></div>
@@ -329,7 +329,7 @@ export function EchoMazeDashboard() {
   }, []);
 
   useEffect(() => {
-    if (state !== 'LEARNING' && state !== 'VERIFYING') return;
+    if (state !== 'LEARNING' && state !== 'VERIFYING' && state !== 'EXPLORING') return;
     const timer = window.setInterval(() => setProgress((value) => {
       if (value >= 100) {
         setState('COMPLETE');
@@ -341,12 +341,14 @@ export function EchoMazeDashboard() {
     return () => window.clearInterval(timer);
   }, [state]);
 
-  const command = (next: 'learn' | 'verify' | 'stop' | 'reset') => {
-    const delivered = socket.send(next);
+  const command = (next: 'learn' | 'verify' | 'explore' | 'stop' | 'reset', durationMs?: number) => {
+    const delivered = socket.send(next, next === 'explore' ? { duration_ms: durationMs ?? 10000 } : undefined);
     if (next === 'learn' || next === 'verify') setLiveMap(resetLiveMap());
+    if (next === 'explore') setLiveMap(resetLiveMap());
     if (next === 'reset') setLiveMap(resetLiveMap());
     if (next === 'learn') { setState('LEARNING'); setProgress(14); setCommandNote(delivered ? 'Baseline command sent to rover' : 'Baseline capture staged locally'); }
     if (next === 'verify') { setState('VERIFYING'); setProgress(58); setCommandNote(delivered ? 'Verification command sent to rover' : 'Verification staged locally'); }
+    if (next === 'explore') { setState('EXPLORING'); setProgress(0); setCommandNote(delivered ? 'Guarded exploration sent to rover' : 'Exploration requires a live receiver'); }
     if (next === 'stop') { setState('STOPPED'); setCommandNote('Run halted by operator'); }
     if (next === 'reset') { setState('IDLE'); setProgress(72); setCommandNote('Awaiting command'); }
   };

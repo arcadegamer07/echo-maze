@@ -249,6 +249,15 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 .command > span { font-size: 13px; font-weight: 610; }
 .command small { display: block; margin-top: 4px; color: var(--muted-2); font-size: 10px; font-weight: 400; }
 .command svg { color: var(--muted); }
+.explore-controls { margin: 12px 0 10px; padding: 11px 12px; border: 1px solid var(--line-soft); background: rgba(255,255,255,.018); }
+.explore-label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: var(--bone); font-size: 11px; font-weight: 620; }
+.explore-label small { color: var(--muted-2); font-size: 9px; font-weight: 400; }
+.explore-row { display: flex; gap: 8px; margin-top: 9px; }
+.explore-row label { display: flex; align-items: center; gap: 6px; flex: 0 0 92px; border: 1px solid var(--line); padding: 0 8px; color: var(--muted-2); font: 600 9px ui-monospace, Consolas, monospace; }
+.explore-row input { width: 48px; border: 0; outline: 0; background: transparent; color: var(--bone); font: 600 13px ui-monospace, Consolas, monospace; }
+.explore-button { flex: 1; min-height: 32px; border: 1px solid rgba(126,240,190,.42); background: rgba(126,240,190,.08); color: var(--signal); display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 11px; cursor: pointer; }
+.explore-button:hover:not(:disabled) { background: rgba(126,240,190,.14); box-shadow: 2px 2px 0 var(--signal); transform: translate(-1px, -1px); }
+.explore-button:disabled { opacity: .35; cursor: not-allowed; }
 .stop-button, .reset-command, .export-button { width: 100%; min-height: 36px; border: 1px solid var(--line); background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 11px; cursor: pointer; }
 .stop-button:hover:not(:disabled) { color: var(--warning); border-color: rgba(255,118,84,.5); }
 .stop-button:disabled { opacity: .35; cursor: not-allowed; }

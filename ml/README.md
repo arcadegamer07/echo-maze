@@ -36,6 +36,27 @@ python -m ml.pipeline verify `
   --output data/runs/verify-01.scores.jsonl
 ```
 
+## Bounded rover exploration
+
+The firmware also accepts a guarded exploratory command through the same
+receiver.  It is useful for a first hardware bring-up, but it is not a
+repeatable baseline route and its `test` telemetry is intentionally excluded
+from model training:
+
+```powershell
+python -m ml.send_command explore --duration-ms 10000
+```
+
+The firmware clamps the requested duration to 30 seconds.  During the run it
+keeps the turret facing forward, checks the ultrasonic and IR obstacle inputs,
+reverses briefly and pivots when the path is blocked, then resumes forward
+motion.  A WebSocket disconnect or the deadline stops the motors.  Stop it
+manually with:
+
+```powershell
+python -m ml.send_command stop
+```
+
 The default window is 20 packets with a stride of 10, which is about two
 seconds at the current 10 Hz telemetry rate. A useful first baseline needs at
 least eight windows (roughly 90 packets). The command rejects `test` and

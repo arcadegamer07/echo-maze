@@ -1,4 +1,4 @@
-export type RunState = 'IDLE' | 'LEARNING' | 'VERIFYING' | 'COMPLETE' | 'STOPPED';
+export type RunState = 'IDLE' | 'LEARNING' | 'VERIFYING' | 'EXPLORING' | 'COMPLETE' | 'STOPPED';
 export type Telemetry = {
   motorState: string; leftMotor: number; rightMotor: number; accel: string; gyro: string;
   ultrasonic: number; ir: number; temperature: number;
