@@ -91,6 +91,10 @@ def scan_to_points(
     sensor packet cannot crash a whole run.
     """
 
+    # Accept the natural ``scan_to_points(pose, readings)`` spelling too;
+    # packet-processing code in early prototypes used both orders.
+    if _looks_like_pose(readings) and not _looks_like_pose(pose):
+        readings, pose = pose, readings  # type: ignore[assignment]
     if max_distance_cm is not None and max_distance_cm <= 0:
         raise ValueError("max_distance_cm must be positive")
     points: list[tuple[float, float]] = []
@@ -105,6 +109,16 @@ def scan_to_points(
         except (TypeError, ValueError):
             continue
     return points
+
+
+def _looks_like_pose(value: Any) -> bool:
+    if isinstance(value, Pose):
+        return True
+    if isinstance(value, Mapping):
+        return any(key in value for key in ("x", "x_cm", "heading", "heading_rad", "theta"))
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return len(value) == 3 and all(isinstance(item, (int, float)) for item in value)
+    return False
 
 
 def scan_to_point_records(

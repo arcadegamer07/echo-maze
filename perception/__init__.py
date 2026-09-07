@@ -3,7 +3,7 @@
 from .baseline_store import BaselineStore, StoredGrid, fingerprint_snapshot, load_snapshot, save_snapshot
 from .diff_detector import ChangedZone, GridDiff, compare_snapshots, compute_diff
 from .occupancy_grid import GridSnapshot, OccupancyGrid, cell_to_world, ray_cells, world_to_cell
-from .pose import Pose, PoseEstimator, normalize_angle, update_pose
+from .pose import DeadReckoner, Pose, PoseEstimator, normalize_angle, update_pose
 from .scan_to_points import local_to_world_point, scan_to_local_point, scan_to_points, scan_to_world_point
 from .structural_score import (
     IMUFingerprint,
@@ -17,6 +17,7 @@ from .structural_score import (
 __all__ = [
     "BaselineStore",
     "ChangedZone",
+    "DeadReckoner",
     "GridDiff",
     "GridSnapshot",
     "IMUFingerprint",

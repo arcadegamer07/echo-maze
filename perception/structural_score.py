@@ -64,17 +64,16 @@ def _extract_samples(samples: Iterable[Any]) -> tuple[np.ndarray, np.ndarray, li
 def compute_imu_fingerprint(samples: Iterable[Any]) -> IMUFingerprint:
     """Compute stationary vibration, variance, RMS and tilt metrics.
 
-    Tilt is calculated from the mean gravity vector.  ``vibration_rms`` is
-    the RMS of magnitude fluctuations around the window mean, while
-    ``accel_rms`` preserves the total acceleration RMS for diagnostics.
+    Tilt is calculated from the mean gravity vector.  ``vibration_rms`` and
+    ``vibration_variance`` follow the project contract literally: they are
+    computed from the acceleration-magnitude series.  ``accel_rms`` preserves
+    the component-wise acceleration RMS for diagnostics.
     """
 
     accel, _gyro, temperatures = _extract_samples(samples)
     magnitudes = np.linalg.norm(accel, axis=1)
-    mean_magnitude = float(np.mean(magnitudes))
-    vibration = magnitudes - mean_magnitude
-    vibration_rms = float(np.sqrt(np.mean(np.square(vibration))))
-    vibration_variance = float(np.var(vibration))
+    vibration_rms = float(np.sqrt(np.mean(np.square(magnitudes))))
+    vibration_variance = float(np.var(magnitudes))
     accel_rms = float(np.sqrt(np.mean(np.square(accel))))
     gravity = np.mean(accel, axis=0)
     tilt_deg = math.degrees(math.atan2(math.hypot(float(gravity[0]), float(gravity[1])), abs(float(gravity[2]))))
@@ -170,4 +169,3 @@ def score_checkpoint(
         vibration=deviations["vibration"],
         thermal=deviations["thermal"],
     )
-

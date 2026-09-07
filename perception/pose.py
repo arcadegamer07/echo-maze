@@ -68,6 +68,24 @@ class Pose:
     def heading_deg(self) -> float:
         return math.degrees(self.heading_rad)
 
+    # Short aliases make the object convenient in plotting code while the
+    # explicit ``*_cm``/``*_rad`` names remain the canonical serialized form.
+    @property
+    def x(self) -> float:
+        return self.x_cm
+
+    @property
+    def y(self) -> float:
+        return self.y_cm
+
+    @property
+    def theta(self) -> float:
+        return self.heading_rad
+
+    @property
+    def confidence_percent(self) -> float:
+        return self.confidence * 100.0
+
     def as_dict(self) -> dict[str, float]:
         return {
             "x_cm": float(self.x_cm),
@@ -75,6 +93,7 @@ class Pose:
             "heading_rad": float(self.heading_rad),
             "heading_deg": float(self.heading_deg),
             "confidence": float(self.confidence),
+            "confidence_percent": float(self.confidence_percent),
         }
 
 
@@ -202,3 +221,6 @@ class PoseEstimator:
     def as_dict(self) -> dict[str, float]:
         return self.pose.as_dict()
 
+
+# Name used in several early planning notes; keep it as a friendly alias.
+DeadReckoner = PoseEstimator
