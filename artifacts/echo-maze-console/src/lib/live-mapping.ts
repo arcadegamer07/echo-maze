@@ -32,6 +32,7 @@ export type LiveRangePoint = {
 export type LivePacketSummary = {
   timestamp: number;
   mode: string;
+  source: string;
   leftSpeed: number;
   rightSpeed: number;
   commandDurationMs: number;
@@ -120,6 +121,7 @@ function readPacket(message: TelemetryMessage) {
     runId: typeof message.run_id === 'string' ? message.run_id : null,
     timestamp: numberOr(message.timestamp, 0),
     mode: typeof message.mode === 'string' ? message.mode : 'live',
+    source: typeof message.source === 'string' ? message.source : 'live',
     leftSpeed: numberOr(motor.left_speed, 0),
     rightSpeed: numberOr(motor.right_speed, 0),
     commandDurationMs: numberOr(motor.duration_ms, 0),
@@ -218,15 +220,19 @@ function occupancySummary(occupancy: Record<string, number>, pose: LivePose) {
 /** Consume one live packet and return a new immutable map state. */
 export function consumeTelemetry(state: LiveMapState, message: TelemetryMessage): LiveMapState {
   const packet = readPacket(message);
-  const newRun = Boolean(state.runId && packet.runId && state.runId !== packet.runId);
-  const rebooted = state.lastTimestamp !== null && packet.timestamp < state.lastTimestamp;
+  // Fixture/test frames validate transport only. They must never move the
+  // pose or paint the real occupancy map (otherwise a connectivity test can
+  // look like rover motion). Only source=live is mappable evidence.
+  const mappable = packet.source === 'live';
+  const newRun = mappable && Boolean(state.runId && packet.runId && state.runId !== packet.runId);
+  const rebooted = mappable && state.lastTimestamp !== null && packet.timestamp < state.lastTimestamp;
   const base = newRun || rebooted ? resetLiveMap(packet.runId) : state;
   const previousTimestamp = base.lastTimestamp;
-  const rawDt = previousTimestamp === null ? 0 : (packet.timestamp - previousTimestamp) / 1000;
+  const rawDt = !mappable || previousTimestamp === null ? 0 : (packet.timestamp - previousTimestamp) / 1000;
   const dtSec = Math.max(0, Math.min(LIVE_MAPPING_CONFIG.maxPacketGapSec, rawDt));
   const scale = LIVE_MAPPING_CONFIG.speedScaleCmPerSecondPerPwm;
-  const dLeft = packet.leftSpeed * dtSec * scale;
-  const dRight = packet.rightSpeed * dtSec * scale;
+  const dLeft = mappable ? packet.leftSpeed * dtSec * scale : 0;
+  const dRight = mappable ? packet.rightSpeed * dtSec * scale : 0;
   const deltaDistance = (dLeft + dRight) / 2;
   const deltaHeading = (dRight - dLeft) / LIVE_MAPPING_CONFIG.wheelBaseCm;
   const headingMid = base.pose.headingRad + deltaHeading / 2;
@@ -241,7 +247,7 @@ export function consumeTelemetry(state: LiveMapState, message: TelemetryMessage)
   };
   const pathPoint: LivePathPoint = { ...pose, timestamp: packet.timestamp };
   const nextPath = [...base.path, pathPoint].slice(-LIVE_MAPPING_CONFIG.pathLimit);
-  const rangePoint: LiveRangePoint | null = packet.distanceCm !== null
+  const rangePoint: LiveRangePoint | null = mappable && packet.distanceCm !== null
     && packet.distanceCm >= 0
     && packet.distanceCm <= LIVE_MAPPING_CONFIG.maxRangeCm
     ? {
@@ -276,13 +282,13 @@ export function consumeTelemetry(state: LiveMapState, message: TelemetryMessage)
     : base.occupancy;
   const occupancy = occupancySummary(nextOccupancy, pose);
   return {
-    runId: packet.runId ?? base.runId,
+    runId: mappable ? packet.runId ?? base.runId : base.runId,
     pose,
     path: nextPath,
     returns: nextReturns,
     packetCount: base.packetCount + 1,
-    totalDistanceCm: base.totalDistanceCm + distanceTravelled,
-    lastTimestamp: packet.timestamp,
+    totalDistanceCm: base.totalDistanceCm + (mappable ? distanceTravelled : 0),
+    lastTimestamp: mappable ? packet.timestamp : base.lastTimestamp,
     latest: { ...packet, dtSec },
     occupancy: nextOccupancy,
     occupancyBounds: occupancy.bounds,
