@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Activity,
   ArrowDownToLine,
@@ -42,6 +42,7 @@ import { OccupancyGridView } from './OccupancyGridView';
 import { PointCloudView } from './PointCloudView';
 import { LiveTraceView } from './LiveTraceView';
 import { LiveLineMap } from './LiveLineMap';
+import { VerificationReviewModal } from './VerificationReviewModal';
 import { ScorePanel } from './ScorePanel';
 import { TelemetryPanel } from './TelemetryPanel';
 import { TimeMachineSlider } from './TimeMachineSlider';
@@ -328,6 +329,8 @@ export function EchoMazeDashboard() {
   const [ghostOn, setGhostOn] = useState(true);
   const [frame, setFrame] = useState(0);
   const [noticeOpen, setNoticeOpen] = useState(false);
+  const [verificationReviewOpen, setVerificationReviewOpen] = useState(false);
+  const previousState = useRef<RunState>('IDLE');
   const [theme, setTheme] = useState<ThemeMode>('reproduction');
 
   useEffect(() => {
@@ -349,6 +352,13 @@ export function EchoMazeDashboard() {
   }, []);
 
   useEffect(() => {
+    if ((state === 'COMPLETE' || state === 'STOPPED') && previousState.current === 'VERIFYING') {
+      setVerificationReviewOpen(true);
+    }
+    previousState.current = state;
+  }, [state]);
+
+  useEffect(() => {
     if (state !== 'LEARNING' && state !== 'VERIFYING' && state !== 'EXPLORING') return;
     const timer = window.setInterval(() => setProgress((value) => {
       if (value >= 100) {
@@ -363,6 +373,7 @@ export function EchoMazeDashboard() {
 
   const command = (next: 'learn' | 'verify' | 'explore' | 'stop' | 'reset', durationMs?: number) => {
     const delivered = socket.send(next, next === 'explore' ? { duration_ms: durationMs ?? 10000 } : undefined);
+    if (next === 'learn' || next === 'verify' || next === 'reset') setVerificationReviewOpen(false);
     if (next === 'learn' || next === 'verify') setLiveMap(resetLiveMap());
     if (next === 'explore') setLiveMap(resetLiveMap());
     if (next === 'reset') setLiveMap(resetLiveMap());
@@ -414,6 +425,14 @@ export function EchoMazeDashboard() {
         </main>
       </div>
       {noticeOpen && <div className="modal-shade"><div className="privacy-modal" role="dialog" aria-labelledby="privacy-title"><h2 id="privacy-title">Connection boundary</h2><p>The console can run with deterministic replay data or connect to the laptop receiver at <code>{DEFAULT_TELEMETRY_URL}</code>. Raw telemetry remains in the local Echo-Maze workspace.</p><button onClick={() => setNoticeOpen(false)}><Check size={13} /> Close notice</button></div></div>}
+      <VerificationReviewModal
+        open={verificationReviewOpen}
+        status={state === 'STOPPED' ? 'STOPPED' : 'COMPLETE'}
+        scores={scores}
+        liveMap={liveMap}
+        onClose={() => setVerificationReviewOpen(false)}
+        onOpenReport={() => { setVerificationReviewOpen(false); setView('report'); }}
+      />
     </div>
   );
 }
