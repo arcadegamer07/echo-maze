@@ -52,23 +52,27 @@ constexpr uint32_t kExploreDefaultDurationMs = 10000UL;
 constexpr uint32_t kExploreCheckPeriodMs = 120UL;
 constexpr uint32_t kExploreReverseMs = 550UL;
 constexpr uint32_t kExploreTurnMs = 850UL;
-constexpr int16_t kExploreForwardSpeed = 65;
-constexpr int16_t kExploreReverseSpeed = -55;
-constexpr int16_t kExploreTurnSpeed = 60;
+// TT gear motors often spin unloaded at ~25% duty but cannot break static
+// friction once the rover is on the floor. These values stay moderate while
+// providing enough starting torque from the 5 V motor supply.
+constexpr int16_t kExploreForwardSpeed = 135;
+constexpr int16_t kExploreReverseSpeed = -120;
+constexpr int16_t kExploreTurnSpeed = 125;
 constexpr float kExploreObstacleCm = 22.0f;
 constexpr uint8_t kExploreInvalidReadLimit = 3;
 
 struct RouteStep { int16_t left; int16_t right; uint32_t durationMs; };
-// A deliberately slow, repeatable zig-zag route. Commands are explicit and
-// the rover remains stopped until the dashboard sends learn or verify. The
-// full route is about 20 seconds; ultrasonic safety can terminate it sooner.
+// A bounded, repeatable moving survey. The initial stationary window lets the
+// servo/sensors settle, then Learn and Verify execute this identical route.
+// Higher PWM over shorter bursts supplies loaded-wheel starting torque without
+// increasing the approximate travel distance of the earlier low-PWM route.
 const RouteStep kRoute[] = {
-    {0, 0, 800},
-    {65, 65, 1800}, {0, 0, 500}, {60, -60, 650}, {0, 0, 500},
-    {65, 65, 1800}, {0, 0, 500}, {60, -60, 650}, {0, 0, 500},
-    {65, 65, 1800}, {0, 0, 500}, {60, 60, 650}, {0, 0, 500},
-    {65, 65, 1800}, {0, 0, 500}, {60, 60, 650}, {0, 0, 500},
-    {-55, -55, 1100}, {0, 0, 700}, {60, -60, 650}, {0, 0, 700},
+    {0, 0, 700},
+    {135, 135, 900}, {0, 0, 450}, {125, -125, 500}, {0, 0, 450},
+    {135, 135, 900}, {0, 0, 450}, {125, -125, 500}, {0, 0, 450},
+    {135, 135, 900}, {0, 0, 450}, {125, 125, 500}, {0, 0, 450},
+    {135, 135, 900}, {0, 0, 450}, {125, 125, 500}, {0, 0, 450},
+    {-120, -120, 650}, {0, 0, 600}, {125, -125, 500}, {0, 0, 650},
 };
 constexpr uint8_t kRouteLength = sizeof(kRoute) / sizeof(kRoute[0]);
 
