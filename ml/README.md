@@ -9,8 +9,9 @@ logs without changing the raw telemetry contract.
 
 1. The receiver stores one JSON object per line in `data/runs/<run_id>.jsonl`.
 2. `fft_features.py` groups packets into short overlapping windows and turns
-   each window into named numeric features (motion, motor balance, scan/IR/
-   temperature summaries, and a low-frequency acceleration spectrum).
+   each window into named gyro-free features (motor balance, scan/IR/
+   temperature summaries, validity fractions and range variation). Optional
+   IMU diagnostics are retained for future hardware but do not drive the model.
 3. `anomaly_model.py` imputes missing optional fields, scales the features, and
    fits an Isolation Forest to healthy `learn` windows.
 4. A later `verify` run is scored window by window. The result is a relative
@@ -42,10 +43,9 @@ least eight windows (roughly 90 packets). The command rejects `test` and
 
 ## Current limits and next integration steps
 
-- The WebSocket stream is about 10 Hz. Its Nyquist limit is about 5 Hz, so the
-  FFT features are only low-frequency summaries. For real vibration analysis,
-  sample the IMU faster on the ESP32 and send window summaries or a higher-rate
-  stream.
+- The current MPU6050 is absent, so vibration/tilt evidence is unavailable and
+  must be described that way in a demo. If the board is repaired later, IMU
+  features can be re-enabled without changing the packet contract.
 - Missing scan, IR, and temperature values remain missing until the model's
   baseline imputer handles them. No fake sensor values are invented.
 - The current model detects unusual telemetry windows. The final decision

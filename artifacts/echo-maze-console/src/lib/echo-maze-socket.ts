@@ -43,7 +43,8 @@ export class EchoMazeSocket {
       this.socket.onmessage = (event) => {
         try {
           const message = JSON.parse(String(event.data));
-          if (message && typeof message === 'object' && !Array.isArray(message)) {
+          if (message && typeof message === 'object' && !Array.isArray(message)
+            && typeof message.run_id === 'string' && message.motor && message.scan) {
             this.telemetryListeners.forEach((listener) => listener(message as TelemetryMessage));
           }
         } catch {

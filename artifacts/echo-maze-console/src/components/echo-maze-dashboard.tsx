@@ -70,7 +70,7 @@ function NavButton({ view, active, icon: Icon, label, onClick }: {
 function parseLiveTelemetry(message: TelemetryMessage) {
   const motor = (message.motor ?? {}) as Record<string, unknown>;
   const scan = (message.scan ?? {}) as Record<string, unknown>;
-  const imu = (message.imu ?? {}) as Record<string, unknown>;
+  const imu = (message.imu ?? null) as Record<string, unknown> | null;
   const number = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) ? value : fallback;
   const vector = (value: unknown, fallback: string) => Array.isArray(value) && value.length === 3
     ? value.map((part) => number(part, 0).toFixed(2)).join(' / ')
@@ -79,8 +79,8 @@ function parseLiveTelemetry(message: TelemetryMessage) {
     motorState: String(message.mode ?? 'Live telemetry').toUpperCase(),
     leftMotor: number(motor.left_speed, telemetry.leftMotor),
     rightMotor: number(motor.right_speed, telemetry.rightMotor),
-    accel: vector(imu.accel, telemetry.accel),
-    gyro: vector(imu.gyro, telemetry.gyro),
+    accel: imu ? vector(imu.accel, 'Unavailable') : 'Unavailable',
+    gyro: imu ? vector(imu.gyro, 'Unavailable') : 'Unavailable',
     ultrasonic: number(scan.distance_cm, telemetry.ultrasonic),
     ir: number(message.ir, telemetry.ir),
     temperature: number(message.temp_c, telemetry.temperature),
@@ -242,7 +242,7 @@ function TelemetryWorkspace({ connected, liveTelemetry, packetCount, frame }: { 
             <div className="packet-row"><span>Run ID</span><strong>{runMetadata.id}</strong><em>string</em></div>
             <div className="packet-row"><span>Timestamp</span><strong>{(Date.now() % 100000).toLocaleString()} ms</strong><em>monotonic</em></div>
             <div className="packet-row"><span>Mode</span><strong>{liveTelemetry?.motorState ?? 'Test / fixture'}</strong><em>learn / verify</em></div>
-            <div className="packet-row"><span>IMU</span><strong>{liveTelemetry ? '3-axis / valid' : 'Canonical sample'}</strong><em>accel + gyro</em></div>
+            <div className="packet-row"><span>IMU / GYRO</span><strong>{liveTelemetry?.gyro === 'Unavailable' ? 'Not installed' : liveTelemetry ? '3-axis / valid' : 'Demo fixture'}</strong><em>gyro-free odometry</em></div>
             <div className="packet-row"><span>Optional</span><strong>scan / IR / temp</strong><em>null safe</em></div>
             <div className="packet-note"><CircleHelp size={15} /><span>Fixture packets validate transport only. Production learn/verify runs require live IMU readings.</span></div>
           </PanelBody>

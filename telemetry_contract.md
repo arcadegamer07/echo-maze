@@ -4,8 +4,10 @@
 
 The ESP32 opens a WebSocket connection to `ws://<laptop-ip>:8765`. It sends
 one UTF-8 JSON object per WebSocket message at approximately 10 Hz. The laptop
-does not send control commands in this first milestone; it replies only with a
-small acknowledgement after accepting or rejecting a message.
+receiver also relays dashboard commands (`learn`, `verify`, `stop`, `reset`,
+`run_route`) to the connected ESP32 and broadcasts accepted telemetry to
+dashboard clients. It replies with a small acknowledgement after accepting or
+rejecting a frame.
 
 Use `mode: "test"` with `source: "fixture"` for connectivity checks before
 all sensors are wired. Test packets are never used to build a baseline, map,
@@ -51,11 +53,13 @@ telemetry.
 | `motor.duration_ms` | number | Duration of the active command. |
 | `scan.angle` | number | Servo angle in degrees; 90° is forward. |
 | `scan.distance_cm` | number or `null` | Ultrasonic range in centimetres after servo settling. |
-| `imu` | object or `null` | `null` is permitted only during a fixture test; otherwise it has accel/gyro below. |
+| `imu` | object or `null` | Optional sensor block. This hardware build is gyro-free, so live runs may use `null`; never invent values. |
 | `imu.accel` | three numbers | x/y/z acceleration in m/s². |
 | `imu.gyro` | three numbers | x/y/z angular velocity in degrees/s. |
 | `ir`, `temp_c` | number or `null` | Raw IR value; temperature in °C. |
 
-Use JSON `null` for an unavailable reading—never a fake zero. The machine
+Use JSON `null` for an unavailable reading—never a fake zero. In gyro-free
+mode the model uses range, motor, IR and temperature evidence plus wheel
+command odometry; vibration/tilt evidence is unavailable. The machine
 readable schema is `ml/schemas/telemetry.schema.json`; it is the source of
 truth for validation.

@@ -86,7 +86,7 @@ def window_feature_rows(
     for window in window_packets(packets, window_size=window_size, stride=stride):
         try:
             rows.append(
-                extract_window_features(window, sample_rate_hz=sample_rate_hz, require_imu=True)
+                extract_window_features(window, sample_rate_hz=sample_rate_hz, require_imu=False)
             )
         except InsufficientTelemetryError as error:
             raise ValueError(f"cannot build an ML window: {error}") from error
@@ -141,7 +141,7 @@ def score_verify(
         windows.append(window)
         try:
             feature_rows.append(
-                extract_window_features(window, sample_rate_hz=sample_rate_hz, require_imu=True)
+                extract_window_features(window, sample_rate_hz=sample_rate_hz, require_imu=False)
             )
         except InsufficientTelemetryError as error:
             raise ValueError(f"cannot score an ML window: {error}") from error

@@ -65,14 +65,6 @@ bool telemetrySampleValid(const TelemetrySample& sample) {
   if (sample.tempValid && !finiteNumber(sample.tempC)) {
     return false;
   }
-  if (sample.mode == TelemetryMode::Learn || sample.mode == TelemetryMode::Verify) {
-    if (!sample.imuValid || !finiteNumber(sample.accel.x) ||
-        !finiteNumber(sample.accel.y) || !finiteNumber(sample.accel.z) ||
-        !finiteNumber(sample.gyro.x) || !finiteNumber(sample.gyro.y) ||
-        !finiteNumber(sample.gyro.z)) {
-      return false;
-    }
-  }
   return true;
 }
 

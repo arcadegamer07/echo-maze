@@ -50,10 +50,10 @@ replayed JSONL run before the rover is wired:
 5. `perception.diff_detector.compare_snapshots` aligns baseline/current grids,
    computes `abs(current - baseline)`, thresholds changed cells, and groups
    contiguous changes into deterministic names such as `ZONE B3`.
-6. `perception.structural_score.compute_imu_fingerprint` summarizes a
-   stationary window (vibration RMS/variance, acceleration RMS, tilt and
-   temperature).  `score_checkpoint` fuses geometry, tilt, vibration and
-   thermal deviations into a transparent LOW/MODERATE/HIGH score.
+6. `perception.structural_score.compute_imu_fingerprint` remains available for
+   a future IMU, while the current gyro-free build uses `score_checkpoint`
+   with geometry and temperature evidence. Missing IMU data is represented as
+   `null`, never as fake zeros.
 
 Example with a live-shaped packet list:
 
@@ -76,9 +76,9 @@ baseline = store.save_baseline(grid, run_id="baseline-01")
 ```
 
 All distances in this layer are centimetres; angles supplied by the telemetry
-contract are degrees, while pose headings are radians.  Real learn/verify
-runs must contain real IMU arrays.  Fixture values are for connectivity tests
-only and must never be used to train or compare a baseline.
+contract are degrees, while pose headings are radians. Real learn/verify runs
+may contain `imu: null` in the gyro-free build. Fixture values are for
+connectivity tests only and must never be used to train or compare a baseline.
 
 Before hardware is ready, confirm the receiver using a simulated rover packet:
 

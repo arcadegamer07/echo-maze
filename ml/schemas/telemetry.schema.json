@@ -17,6 +17,6 @@
   },
   "allOf": [
     {"if": {"properties": {"mode": {"const": "test"}}}, "then": {"properties": {"source": {"const": "fixture"}}}},
-    {"if": {"properties": {"mode": {"enum": ["learn", "verify"]}}}, "then": {"properties": {"source": {"const": "live"}, "imu": {"type": "object"}}}}
+    {"if": {"properties": {"mode": {"enum": ["learn", "verify"]}}}, "then": {"properties": {"source": {"const": "live"}}}}
   ]
 }
