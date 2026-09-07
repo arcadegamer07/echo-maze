@@ -1,12 +1,16 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <Wire.h>
 #include <WebSocketsClient.h>
 
 #include "secrets.h"
+#include "sensors.h"
 #include "telemetry.h"
 
 WebSocketsClient webSocket;
 bool webSocketConnected = false;
+SensorSuite sensorSuite;
+bool sensorSuiteReady = false;
 
 void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
   switch (type) {
@@ -48,9 +52,29 @@ void sendConnectivityTest() {
   webSocket.sendTXT(packet);
 }
 
+void printI2cScan() {
+  Serial.println("I2C scan (SDA=21, SCL=22):");
+  uint8_t found = 0;
+  for (uint8_t address = 1; address < 127; ++address) {
+    Wire.beginTransmission(address);
+    const uint8_t error = Wire.endTransmission();
+    if (error == 0) {
+      Serial.printf("  found 0x%02X\n", address);
+      ++found;
+    }
+  }
+  if (found == 0) {
+    Serial.println("  no I2C devices found");
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
+
+  sensorSuiteReady = sensorSuite.begin();
+  Serial.print("Sensor bring-up: MPU6050 ");
+  Serial.println(sensorSuite.imuAvailable() ? "detected" : "NOT detected");
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ECHO_WIFI_SSID, ECHO_WIFI_PASSWORD);
@@ -78,8 +102,39 @@ void loop() {
   webSocket.loop();
 
   if (Serial.available()) {
-    if (Serial.read() == 'p') {
+    const char command = Serial.read();
+    if (command == 'p') {
       sendConnectivityTest();
+    } else if (command == 'a') {
+      printI2cScan();
+    } else if (command == 'i') {
+      SensorReadings readings;
+      if (!sensorSuiteReady || !sensorSuite.read(readings)) {
+        Serial.println("Sensor snapshot unavailable");
+      } else {
+        Serial.print("IMU valid: ");
+        Serial.println(readings.imuValid ? "yes" : "no");
+        if (readings.imuValid) {
+          Serial.printf("accel m/s2: %.3f, %.3f, %.3f\n", readings.accel.x,
+                        readings.accel.y, readings.accel.z);
+          Serial.printf("gyro rad/s: %.3f, %.3f, %.3f\n", readings.gyro.x,
+                        readings.gyro.y, readings.gyro.z);
+        }
+        Serial.print("Ultrasonic cm: ");
+        if (readings.distanceValid) {
+          Serial.println(readings.distanceCm, 2);
+        } else {
+          Serial.println("no echo");
+        }
+        Serial.print("IR raw: ");
+        Serial.println(readings.irValid ? String(readings.ir, 0) : "invalid");
+        Serial.print("Temperature C: ");
+        if (readings.tempValid) {
+          Serial.println(readings.tempC, 2);
+        } else {
+          Serial.println("not ready");
+        }
+      }
     }
   }
 }
