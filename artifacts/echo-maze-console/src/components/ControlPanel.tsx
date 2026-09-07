@@ -36,7 +36,7 @@ export function ControlPanel({
 
         <div className="command-row">
           <button className="command learn-command" disabled={active} onClick={() => onCommand('learn')}>
-            <b>01</b><span>Learn environment<small>Record the reference route</small></span><ArrowUpRight size={17} />
+            <b>01</b><span>Learn environment<small>Drive + scan the reference route</small></span><ArrowUpRight size={17} />
           </button>
           <button className="command verify-command" disabled={active} onClick={() => onCommand('verify')}>
             <b>02</b><span>Verify structure<small>Repeat and compare the route</small></span><ArrowUpRight size={17} />
