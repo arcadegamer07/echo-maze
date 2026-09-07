@@ -7,6 +7,8 @@ export type Pose = { x: number; y: number; heading: number; confidence: number }
 export type ScoreSet = { geometry: number; tilt: number; vibration: number; thermal: number; total: number };
 export type DiffZone = { id: string; label: string; severity: string; delta: string };
 export type RunMetadata = { id: string; mode: string; startedAt: string; route: string; points: number; confidence: number };
+export type PointCloudPoint = { x: number; y: number; intensity: number; age: number };
+export type CellMapMode = 'occupancy' | 'diff' | 'baseline' | 'current';
 
 export const telemetry: Telemetry = {
   motorState: 'CRUISE / SCAN', leftMotor: 68, rightMotor: 71, accel: '0.02 / -0.01 / 0.98 g',
@@ -43,3 +45,19 @@ export function makeDiff(columns = 16, rows = 10): number[] {
 export const baselineGrid = makeGrid();
 export const currentGrid = makeGrid(16, 10, 0.35);
 export const diffGrid = makeDiff();
+
+export function makePointCloud(phase = 0): PointCloudPoint[] {
+  const points: PointCloudPoint[] = [];
+  for (let index = 0; index < 420; index += 1) {
+    const angle = (index / 420) * Math.PI * 2;
+    const ring = 18 + (index % 7) * 5 + Math.sin(index * 0.48 + phase) * 3;
+    const corridor = index % 11 < 4 ? 22 : 0;
+    points.push({
+      x: 160 + Math.cos(angle) * (ring + corridor) + Math.sin(index * 0.17 + phase) * 6,
+      y: 110 + Math.sin(angle) * (ring * 0.72 + corridor) + Math.cos(index * 0.11) * 4,
+      intensity: Math.min(1, 0.25 + (index % 13) / 15),
+      age: index / 420,
+    });
+  }
+  return points;
+}
