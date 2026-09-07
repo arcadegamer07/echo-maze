@@ -29,15 +29,14 @@ Servo turretServo;
 Adafruit_SSD1306 oled(128, 64, &Wire, -1);
 bool oledReady = false;
 // The servo horn was mounted so that write(90) points straight ahead. Keep
-// the ultrasonic head within a front-facing 75--105° sweep: wider angles make
-// the sensor body/arm reach the IR LED and breadboard on this chassis. Each
-// movement is 15° (75° -> 90° -> 105°).
+// the ultrasonic head within a front-facing 60--120° sweep: wider angles make
+// the sensor body/arm reach the IR LED and breadboard on this chassis. The
+// explicit ping-pong sequence starts at centre, goes right first, returns
+// through centre, then goes left; every move is exactly 15°.
 constexpr uint8_t kServoForwardDeg = 90;
-constexpr uint8_t kScanStartDeg = 75;
-constexpr uint8_t kScanEndDeg = 105;
 constexpr uint8_t kScanStepDeg = 15;
-constexpr uint8_t kScanSampleCount =
-    static_cast<uint8_t>((kScanEndDeg - kScanStartDeg) / kScanStepDeg + 1);
+constexpr uint8_t kScanAngles[] = {90, 105, 120, 105, 90, 75, 60, 75};
+constexpr uint8_t kScanSampleCount = sizeof(kScanAngles) / sizeof(kScanAngles[0]);
 uint8_t scanIndex = 0;
 TelemetryMode activeMode = TelemetryMode::Test;
 bool routeActive = false;
@@ -151,7 +150,7 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
 void sendTelemetry() {
   if (!webSocketConnected || activeMode == TelemetryMode::Test) return;
   SensorReadings readings;
-  const uint8_t angle = static_cast<uint8_t>(kScanStartDeg + scanIndex * kScanStepDeg);
+  const uint8_t angle = kScanAngles[scanIndex];
   turretServo.write(angle);
   delay(60); // let the servo settle before the ultrasonic ping
   sensorSuite.read(readings);
