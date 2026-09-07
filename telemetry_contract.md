@@ -58,15 +58,6 @@ telemetry.
 | `imu.gyro` | three numbers | x/y/z angular velocity in degrees/s. |
 | `ir`, `temp_c` | number or `null` | Raw IR value; temperature in °C. |
 
-The assembled rover currently reports ultrasonic samples in the safe
-front-facing window **60°–120°** in 15° steps. Runtime order is
-**90°, 105°, 120°, 105°, 90°, 75°, 60°, 75°** so the servo starts at centre,
-checks the right side, then crosses centre to check the left side without an
-abrupt extreme-to-extreme jump. Wider positions are intentionally excluded
-because this particular servo mount lets the ultrasonic head/arm reach the IR
-LED and breadboard. The schema still accepts the full 0–180° range for
-compatibility with future mounts.
-
 Use JSON `null` for an unavailable reading—never a fake zero. In gyro-free
 mode the model uses range, motor, IR and temperature evidence plus wheel
 command odometry; vibration/tilt evidence is unavailable. The machine
