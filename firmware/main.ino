@@ -35,11 +35,16 @@ uint8_t routeStep = 0;
 uint32_t routeStepStartedMs = 0;
 
 struct RouteStep { int16_t left; int16_t right; uint32_t durationMs; };
-// A deliberately short, slow, repeatable route. Commands are explicit and
-// the rover remains stopped until the dashboard sends learn or verify.
+// A deliberately slow, repeatable zig-zag route. Commands are explicit and
+// the rover remains stopped until the dashboard sends learn or verify. The
+// full route is about 20 seconds; ultrasonic safety can terminate it sooner.
 const RouteStep kRoute[] = {
-    {0, 0, 600}, {80, 80, 1400}, {0, 0, 600},
-    {75, -75, 550}, {0, 0, 600}, {80, 80, 1400}, {0, 0, 500},
+    {0, 0, 800},
+    {65, 65, 1800}, {0, 0, 500}, {60, -60, 650}, {0, 0, 500},
+    {65, 65, 1800}, {0, 0, 500}, {60, -60, 650}, {0, 0, 500},
+    {65, 65, 1800}, {0, 0, 500}, {60, 60, 650}, {0, 0, 500},
+    {65, 65, 1800}, {0, 0, 500}, {60, 60, 650}, {0, 0, 500},
+    {-55, -55, 1100}, {0, 0, 700}, {60, -60, 650}, {0, 0, 700},
 };
 constexpr uint8_t kRouteLength = sizeof(kRoute) / sizeof(kRoute[0]);
 
