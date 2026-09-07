@@ -4,6 +4,7 @@
 #include <WebSocketsClient.h>
 
 #include "secrets.h"
+#include "motor_control.h"
 #include "sensors.h"
 #include "telemetry.h"
 
@@ -11,6 +12,7 @@ WebSocketsClient webSocket;
 bool webSocketConnected = false;
 SensorSuite sensorSuite;
 bool sensorSuiteReady = false;
+MotorController motorController;
 
 void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
   switch (type) {
@@ -73,6 +75,7 @@ void setup() {
   delay(1000);
 
   sensorSuiteReady = sensorSuite.begin();
+  motorController.begin();
   Serial.print("Sensor bring-up: MPU6050 ");
   Serial.println(sensorSuite.imuAvailable() ? "detected" : "NOT detected");
 
@@ -107,6 +110,10 @@ void loop() {
       sendConnectivityTest();
     } else if (command == 'a') {
       printI2cScan();
+    } else if (command == 'm') {
+      Serial.println("Motor diagnostic starting: low PWM, one motor at a time");
+      motorController.runDiagnostic();
+      Serial.println("Motor diagnostic complete; driver stopped");
     } else if (command == 'i') {
       SensorReadings readings;
       if (!sensorSuiteReady || !sensorSuite.read(readings)) {
