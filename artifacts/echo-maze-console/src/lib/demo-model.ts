@@ -11,11 +11,11 @@ export type PointCloudPoint = { x: number; y: number; intensity: number; age: nu
 export type CellMapMode = 'occupancy' | 'diff' | 'baseline' | 'current';
 
 export const telemetry: Telemetry = {
-  motorState: 'CRUISE / SCAN', leftMotor: 68, rightMotor: 71, accel: '0.02 / -0.01 / 0.98 g',
-  gyro: '0.3 / 0.1 / -0.2 °/s', ultrasonic: 42.8, ir: 318, temperature: 24.6,
+  motorState: 'CRUISE / SCAN', leftMotor: 68, rightMotor: 71, accel: 'Unavailable',
+  gyro: 'Unavailable', ultrasonic: 42.8, ir: 318, temperature: 24.6,
 };
 export const pose: Pose = { x: 2.84, y: 1.42, heading: 18, confidence: 94.7 };
-export const scores: ScoreSet = { geometry: 22, tilt: 11, vibration: 38, thermal: 9, total: 31 };
+export const scores: ScoreSet = { geometry: 22, tilt: 0, vibration: 0, thermal: 9, total: 22 };
 export const diffZones: DiffZone[] = [
   { id: 'ZONE B3', label: 'east wall displacement', severity: 'HIGH', delta: '+12.4 cm' },
   { id: 'ZONE C1', label: 'floor plane tilt', severity: 'MEDIUM', delta: '+2.8°' },

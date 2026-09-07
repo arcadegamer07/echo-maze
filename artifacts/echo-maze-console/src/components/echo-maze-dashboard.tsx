@@ -281,12 +281,12 @@ function Analysis({ ghostOn, onToggleGhost }: { ghostOn: boolean; onToggleGhost:
         <Panel title="Evidence reading" code="MODEL NOTES">
           <PanelBody className="interpretation">
             <div><i className="interpretation-icon cyan">01</i><p><strong>Geometry leads.</strong> East-wall displacement is the strongest signal.</p></div>
-            <div><i className="interpretation-icon violet">02</i><p><strong>Vibration corroborates.</strong> A high-energy window supports the spatial change.</p></div>
+            <div><i className="interpretation-icon violet">02</i><p><strong>Sensor coverage is explicit.</strong> Gyro/vibration evidence is offline in this hardware build.</p></div>
             <div><i className="interpretation-icon amber">03</i><p><strong>Human review remains final.</strong> Anomaly detection is an early-warning aid.</p></div>
           </PanelBody>
         </Panel>
       </div>
-      <div className="footer-strip"><span><Check size={13} /> Fusion ready</span><span>Diff threshold / 0.35</span><span>FFT window / 2.0 sec</span></div>
+      <div className="footer-strip"><span><Check size={13} /> Geometry model ready</span><span>Diff threshold / 0.35</span><span>Range window / 2.0 sec</span></div>
     </div>
   );
 }
