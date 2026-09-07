@@ -58,6 +58,8 @@ export type LiveMapState = {
 export const LIVE_MAPPING_CONFIG = {
   wheelBaseCm: 14,
   speedScaleCmPerSecondPerPwm: 0.08,
+  scanStartDeg: 45,
+  scanEndDeg: 135,
   servoCenterDeg: 90,
   maxRangeCm: 250,
   maxPacketGapSec: 0.5,

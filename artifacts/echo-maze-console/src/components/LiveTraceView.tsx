@@ -96,7 +96,7 @@ export function LiveTraceView({ state, connected }: { state: LiveMapState; conne
         <div className="live-trace-toolbar">
           <span className="status-chip"><i className={connected ? '' : 'is-muted'} />{connected ? 'Plotting received packets' : 'Connect receiver to plot'}</span>
           <span className="trace-method"><Activity size={13} /> timestamp odometry / {LIVE_MAPPING_CONFIG.speedScaleCmPerSecondPerPwm.toFixed(2)} cm·s⁻¹·PWM⁻¹</span>
-          <span className="trace-method"><Crosshair size={13} /> 90° servo = forward</span>
+          <span className="trace-method"><Crosshair size={13} /> {LIVE_MAPPING_CONFIG.scanStartDeg}–{LIVE_MAPPING_CONFIG.scanEndDeg}° sweep / 90° forward</span>
         </div>
         <div className="live-trace-layout">
           <div className="live-trace-canvas"><TraceMap state={state} /></div>
@@ -115,4 +115,3 @@ export function LiveTraceView({ state, connected }: { state: LiveMapState; conne
     </DashboardPanel>
   );
 }
-

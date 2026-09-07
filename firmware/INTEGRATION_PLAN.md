@@ -12,8 +12,9 @@ learn/verify route.
   (GPIO 4), and optional MPU6050 detection. Missing IMU is never faked.
 - `motor_control.h/.cpp`: bounded PWM drive plus a low-power diagnostic;
   driver is in standby unless a command is active.
-- `main.ino`: WebSocket command handling, repeatable route, 15° servo sweep,
-  OLED status, 10 Hz telemetry, and obstacle/WebSocket emergency stop.
+- `main.ino`: WebSocket command handling, repeatable route, a front-facing
+  45–135° servo sweep in 15° steps (90° straight ahead), OLED status, 10 Hz
+  telemetry, and obstacle/WebSocket emergency stop.
 - `health.h/.cpp`: obstacle and connection safety checks are evaluated before
   advancing the route.
 

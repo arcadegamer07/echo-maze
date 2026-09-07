@@ -5,8 +5,9 @@
 // Pure sweep scheduling logic. The eventual ESP32Servo/HC-SR04 adapter will
 // move to each angle, wait settleMs, then attach its distance reading here.
 struct ServoSweepConfig {
-  uint16_t startAngleDeg = 0;
-  uint16_t endAngleDeg = 180;
+  // Keep the turret in the front-facing cone; 90° is straight ahead.
+  uint16_t startAngleDeg = 45;
+  uint16_t endAngleDeg = 135;
   uint16_t stepDeg = 15;
   uint16_t settleMs = 75;
 };
