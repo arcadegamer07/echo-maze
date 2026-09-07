@@ -10,7 +10,10 @@ enum class SafetyState : uint8_t {
 };
 
 struct HealthLimits {
-  float obstacleStopCm = 15.0f;
+  // Learn/Verify route: stop only when a confirmed obstacle is very close.
+  // Explore uses its own earlier avoidance threshold in main.ino so it can
+  // reverse/turn and continue instead of ending the run.
+  float obstacleStopCm = 10.0f;
   float criticalBatteryV = 6.4f;
   float lowBatteryV = 6.8f;
   float maxTiltDeg = 35.0f;
