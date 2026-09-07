@@ -51,6 +51,10 @@ export type LiveMapState = {
   totalDistanceCm: number;
   lastTimestamp: number | null;
   latest: LivePacketSummary | null;
+  /** Sparse occupancy probabilities keyed by integer cell coordinates. */
+  occupancy: Record<string, number>;
+  occupancyBounds: { minX: number; maxX: number; minY: number; maxY: number };
+  mapConfidence: number;
 };
 
 // These are intentionally visible in the UI so the team can calibrate them.
@@ -65,7 +69,14 @@ export const LIVE_MAPPING_CONFIG = {
   maxPacketGapSec: 0.5,
   pathLimit: 600,
   returnLimit: 1400,
+  cellSizeCm: 10,
+  mapMaxRangeCm: 250,
 } as const;
+
+const HIT_LOG_ODDS = Math.log(.85 / .15);
+const MISS_LOG_ODDS = Math.log(.30 / .70);
+const MIN_LOG_ODDS = -6;
+const MAX_LOG_ODDS = 6;
 
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 const numberOr = (value: unknown, fallback: number) => finite(value) ? value : fallback;
@@ -89,6 +100,9 @@ export function createLiveMapState(): LiveMapState {
     totalDistanceCm: 0,
     lastTimestamp: null,
     latest: null,
+    occupancy: {},
+    occupancyBounds: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
+    mapConfidence: 0,
   };
 }
 
@@ -113,6 +127,91 @@ function readPacket(message: TelemetryMessage) {
     distanceCm: nullableNumber(scan.distance_cm ?? scan.distance),
     temperatureC: nullableNumber(message.temp_c),
     ir: nullableNumber(message.ir),
+  };
+}
+
+function cellKey(x: number, y: number) {
+  return `${x},${y}`;
+}
+
+function worldToCell(valueCm: number) {
+  return Math.floor(valueCm / LIVE_MAPPING_CONFIG.cellSizeCm);
+}
+
+function rayCells(startX: number, startY: number, endX: number, endY: number) {
+  const cells: Array<[number, number]> = [];
+  let x = startX;
+  let y = startY;
+  const dx = Math.abs(endX - startX);
+  const dy = Math.abs(endY - startY);
+  const stepX = startX < endX ? 1 : -1;
+  const stepY = startY < endY ? 1 : -1;
+  let error = dx - dy;
+  while (true) {
+    cells.push([x, y]);
+    if (x === endX && y === endY) break;
+    const twice = 2 * error;
+    if (twice > -dy) { error -= dy; x += stepX; }
+    if (twice < dx) { error += dx; y += stepY; }
+  }
+  return cells;
+}
+
+function probabilityFromLogOdds(logOdds: number) {
+  const bounded = Math.max(MIN_LOG_ODDS, Math.min(MAX_LOG_ODDS, logOdds));
+  return 1 / (1 + Math.exp(-bounded));
+}
+
+function updateOccupancy(
+  occupancy: Record<string, number>,
+  originXcm: number,
+  originYcm: number,
+  endpointXcm: number,
+  endpointYcm: number,
+  hit: boolean,
+) {
+  const next = { ...occupancy };
+  const originX = worldToCell(originXcm);
+  const originY = worldToCell(originYcm);
+  const endpointX = worldToCell(endpointXcm);
+  const endpointY = worldToCell(endpointYcm);
+  const cells = rayCells(originX, originY, endpointX, endpointY);
+  const freeCells = hit && cells.length > 1 ? cells.slice(0, -1) : cells;
+  for (const [x, y] of freeCells) {
+    const key = cellKey(x, y);
+    const oldProbability = next[key] ?? .5;
+    const oldLogOdds = Math.log(oldProbability / (1 - oldProbability));
+    next[key] = probabilityFromLogOdds(oldLogOdds + MISS_LOG_ODDS);
+  }
+  if (hit) {
+    const [x, y] = cells[cells.length - 1];
+    const key = cellKey(x, y);
+    const oldProbability = next[key] ?? .5;
+    const oldLogOdds = Math.log(oldProbability / (1 - oldProbability));
+    next[key] = probabilityFromLogOdds(oldLogOdds + HIT_LOG_ODDS);
+  }
+  return next;
+}
+
+function occupancySummary(occupancy: Record<string, number>, pose: LivePose) {
+  const keys = Object.keys(occupancy);
+  const poseCell: [number, number] = [worldToCell(pose.xCm), worldToCell(pose.yCm)];
+  if (!keys.length) {
+    return {
+      bounds: { minX: poseCell[0], maxX: poseCell[0], minY: poseCell[1], maxY: poseCell[1] },
+      confidence: 0,
+    };
+  }
+  const cells = keys.map((key) => key.split(',').map(Number) as [number, number]);
+  const allX = [...cells.map(([x]) => x), poseCell[0]];
+  const allY = [...cells.map(([, y]) => y), poseCell[1]];
+  const confidence = Object.values(occupancy).reduce((sum, probability) => sum + 2 * Math.abs(probability - .5), 0) / keys.length * 100;
+  return {
+    bounds: {
+      minX: Math.min(...allX), maxX: Math.max(...allX),
+      minY: Math.min(...allY), maxY: Math.max(...allY),
+    },
+    confidence,
   };
 }
 
@@ -165,6 +264,17 @@ export function consumeTelemetry(state: LiveMapState, message: TelemetryMessage)
   const nextReturns = rangePoint
     ? [...base.returns, rangePoint].slice(-LIVE_MAPPING_CONFIG.returnLimit)
     : base.returns;
+  const nextOccupancy = rangePoint
+    ? updateOccupancy(
+      base.occupancy,
+      rangePoint.originXcm,
+      rangePoint.originYcm,
+      rangePoint.xCm,
+      rangePoint.yCm,
+      true,
+    )
+    : base.occupancy;
+  const occupancy = occupancySummary(nextOccupancy, pose);
   return {
     runId: packet.runId ?? base.runId,
     pose,
@@ -174,6 +284,9 @@ export function consumeTelemetry(state: LiveMapState, message: TelemetryMessage)
     totalDistanceCm: base.totalDistanceCm + distanceTravelled,
     lastTimestamp: packet.timestamp,
     latest: { ...packet, dtSec },
+    occupancy: nextOccupancy,
+    occupancyBounds: occupancy.bounds,
+    mapConfidence: occupancy.confidence,
   };
 }
 
