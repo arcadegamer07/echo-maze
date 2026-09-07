@@ -50,14 +50,14 @@ bool exploreTurnRight = true;
 constexpr uint32_t kExploreMaxDurationMs = 30000UL;
 constexpr uint32_t kExploreDefaultDurationMs = 10000UL;
 constexpr uint32_t kExploreCheckPeriodMs = 120UL;
-constexpr uint32_t kExploreReverseMs = 550UL;
-constexpr uint32_t kExploreTurnMs = 850UL;
+constexpr uint32_t kExploreReverseMs = 400UL;
+constexpr uint32_t kExploreTurnMs = 560UL;
 // TT gear motors often spin unloaded at ~25% duty but cannot break static
 // friction once the rover is on the floor. These values stay moderate while
 // providing enough starting torque from the 5 V motor supply.
-constexpr int16_t kExploreForwardSpeed = 135;
-constexpr int16_t kExploreReverseSpeed = -120;
-constexpr int16_t kExploreTurnSpeed = 125;
+constexpr int16_t kExploreForwardSpeed = 200;
+constexpr int16_t kExploreReverseSpeed = -185;
+constexpr int16_t kExploreTurnSpeed = 190;
 constexpr float kExploreObstacleCm = 22.0f;
 constexpr uint8_t kExploreInvalidReadLimit = 3;
 
@@ -68,11 +68,11 @@ struct RouteStep { int16_t left; int16_t right; uint32_t durationMs; };
 // increasing the approximate travel distance of the earlier low-PWM route.
 const RouteStep kRoute[] = {
     {0, 0, 700},
-    {135, 135, 900}, {0, 0, 450}, {125, -125, 500}, {0, 0, 450},
-    {135, 135, 900}, {0, 0, 450}, {125, -125, 500}, {0, 0, 450},
-    {135, 135, 900}, {0, 0, 450}, {125, 125, 500}, {0, 0, 450},
-    {135, 135, 900}, {0, 0, 450}, {125, 125, 500}, {0, 0, 450},
-    {-120, -120, 650}, {0, 0, 600}, {125, -125, 500}, {0, 0, 650},
+    {200, 200, 600}, {0, 0, 450}, {190, -190, 330}, {0, 0, 450},
+    {200, 200, 600}, {0, 0, 450}, {190, -190, 330}, {0, 0, 450},
+    {200, 200, 600}, {0, 0, 450}, {190, 190, 330}, {0, 0, 450},
+    {200, 200, 600}, {0, 0, 450}, {190, 190, 330}, {0, 0, 450},
+    {-185, -185, 420}, {0, 0, 600}, {190, -190, 330}, {0, 0, 650},
 };
 constexpr uint8_t kRouteLength = sizeof(kRoute) / sizeof(kRoute[0]);
 

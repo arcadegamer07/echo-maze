@@ -12,7 +12,7 @@ class MotorController {
   void begin();
   void stop();
   void setSpeeds(int16_t left, int16_t right);
-  void runDiagnostic(uint8_t pwm = 135);
+  void runDiagnostic(uint8_t pwm = 200);
 
  private:
   static int16_t clampSpeed(int16_t value);
