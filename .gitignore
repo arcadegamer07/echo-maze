@@ -10,6 +10,8 @@ out-tsc
 
 # dependencies
 node_modules
+.pnpm-store/
+artifacts/echo-maze-console/vite.preview.config.mjs
 
 # IDEs and editors
 /.idea
