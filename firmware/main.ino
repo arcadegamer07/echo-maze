@@ -28,12 +28,13 @@ String activeRunId;
 Servo turretServo;
 Adafruit_SSD1306 oled(128, 64, &Wire, -1);
 bool oledReady = false;
-// The ultrasonic turret is mounted inside the rover's front envelope. A full
-// 0--180° sweep points into the breadboard at the rear, so keep the scan in a
-// front-facing 45--135° cone (90° is straight ahead).
-constexpr uint8_t kScanStartDeg = 45;
-constexpr uint8_t kScanEndDeg = 135;
-constexpr uint8_t kScanStepDeg = 15;
+// The servo horn was mounted so that write(90) points straight ahead. Keep
+// the ultrasonic head within a tiny 85--95° micro-sweep: wider angles make
+// the sensor body/arm reach the IR LED and breadboard on this chassis.
+constexpr uint8_t kServoForwardDeg = 90;
+constexpr uint8_t kScanStartDeg = 85;
+constexpr uint8_t kScanEndDeg = 95;
+constexpr uint8_t kScanStepDeg = 5;
 constexpr uint8_t kScanSampleCount =
     static_cast<uint8_t>((kScanEndDeg - kScanStartDeg) / kScanStepDeg + 1);
 uint8_t scanIndex = 0;
@@ -231,7 +232,7 @@ void setup() {
   showStatus("READY", "gyro-free mode");
   turretServo.setPeriodHertz(50);
   turretServo.attach(EchoPins::ServoSignal, 500, 2400);
-  turretServo.write(90);
+  turretServo.write(kServoForwardDeg);
   Serial.println("Echo-Maze gyro-free firmware");
   Serial.println(sensorSuite.imuAvailable() ? "MPU6050 detected (not used)" : "MPU6050 absent; using gyro-free mode");
   WiFi.mode(WIFI_STA); WiFi.begin(ECHO_WIFI_SSID, ECHO_WIFI_PASSWORD);
