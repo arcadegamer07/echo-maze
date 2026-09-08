@@ -76,12 +76,16 @@ export const LIVE_MAPPING_CONFIG = {
   scanStartDeg: 0,
   scanEndDeg: 180,
   servoCenterDeg: 90,
-  maxRangeCm: 250,
+  // Keep the dashboard's accepted/map-plotted range slightly above the
+  // previous 2.5 m limit so valid HC-SR04 returns farther down the corridor
+  // remain visible. This is a modest increase; it does not change the
+  // close-obstacle safety threshold below.
+  maxRangeCm: 300,
   maxPacketGapSec: 0.5,
   pathLimit: 600,
   returnLimit: 1400,
   cellSizeCm: 10,
-  mapMaxRangeCm: 250,
+  mapMaxRangeCm: 300,
   obstacleDistanceCm: 22,
 } as const;
 
