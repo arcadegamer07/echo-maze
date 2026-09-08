@@ -61,6 +61,7 @@ data/runs/*.csv
 data/runs/*.log
 data/baseline/*.joblib
 data/baseline/*.json
+/outputs/
 
 # Local firmware credentials and PlatformIO build output
 firmware/secrets.h
