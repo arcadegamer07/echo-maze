@@ -31,7 +31,7 @@ deadline and stops on a lost inbound WebSocket heartbeat.
 |---|---|---|
 | `{"cmd":"learn"}` | Repeatable route plus 15° range sweep. | Stops on 10 cm ultrasonic or active IR obstacle. |
 | `{"cmd":"verify"}` | Identical repeatable route for comparison. | Same safety limits as Learn. |
-| `{"cmd":"explore","duration_ms":10000}` | Forward, reverse, turn, resume around obstacles. | 1–30,000 ms; 22 cm avoidance threshold. |
+| `{"cmd":"explore","duration_ms":10000}` | Stationary 60–120° front-cone sweep, then forward, reverse, turn, resweep, and resume around obstacles. | 1–30,000 ms; 22 cm avoidance threshold. |
 | `{"cmd":"drive_straight","duration_ms":2000,"speed":230}` | Forward-only guarded distance check. | 1–10,000 ms; PWM clamped to 180–245. |
 | `{"cmd":"scan_only"}` | Motors off; captures one stationary 0–180° ultrasonic sweep. | 13 samples at 15° increments. |
 | `{"cmd":"motor_diagnostic","wheels_lifted":true}` | Tests each motor direction with off pauses. | Requires explicit wheel-up confirmation; 4-second watchdog. |

@@ -48,7 +48,10 @@ enum class StopReason : uint8_t {
   DiagnosticWatchdog,
 };
 
-enum class ExplorePhase : uint8_t { Forward, Reverse, Turn };
+// Explore begins with a short stationary scan.  Keeping the sweep as its own
+// phase means the ultrasonic reading is not used for obstacle avoidance while
+// the turret is pointed away from the rover's forward direction.
+enum class ExplorePhase : uint8_t { Scan, Forward, Reverse, Turn };
 
 struct RouteStep { int16_t left; int16_t right; uint32_t durationMs; };
 struct DiagnosticStep { int16_t left; int16_t right; uint32_t durationMs; };
@@ -76,11 +79,12 @@ uint8_t routeStep = 0;
 uint32_t routeStepStartedMs = 0;
 
 bool exploreActive = false;
-ExplorePhase explorePhase = ExplorePhase::Forward;
+ExplorePhase explorePhase = ExplorePhase::Scan;
 uint32_t exploreDeadlineMs = 0;
 uint32_t explorePhaseStartedMs = 0;
 uint32_t lastExploreCheckMs = 0;
 uint8_t exploreInvalidDistanceReads = 0;
+uint8_t exploreScanIndex = 0;
 bool exploreTurnRight = true;
 
 bool driveStraightActive = false;
@@ -107,6 +111,15 @@ constexpr uint32_t kExploreReverseMs = 400UL;
 constexpr uint32_t kExploreTurnMs = 560UL;
 constexpr float kExploreObstacleCm = 22.0f;
 constexpr uint8_t kExploreInvalidReadLimit = 3U;
+// The physical turret is mounted close to the breadboard.  Explore therefore
+// uses a front cone rather than the 0--180 degree bench sweep used by
+// scan_only.  Five 15 degree samples are enough to see left/centre/right
+// clearance without driving the sensor into the chassis.
+constexpr uint8_t kExploreScanStartDeg = 60U;
+constexpr uint8_t kExploreScanEndDeg = 120U;
+constexpr uint8_t kExploreScanStepDeg = 15U;
+constexpr uint8_t kExploreScanFrameCount =
+    ((kExploreScanEndDeg - kExploreScanStartDeg) / kExploreScanStepDeg) + 1U;
 
 constexpr uint32_t kDriveStraightDefaultDurationMs = 2000UL;
 constexpr uint32_t kDriveStraightMaxDurationMs = 10000UL;
@@ -209,7 +222,8 @@ bool runtimeActive() {
 }
 
 bool usesForwardTurret() {
-  return exploreActive || driveStraightActive || motorDiagnosticActive;
+  return driveStraightActive || motorDiagnosticActive ||
+         (exploreActive && explorePhase != ExplorePhase::Scan);
 }
 
 String jsonEscape(const String& value) {
@@ -447,19 +461,32 @@ void startRun(TelemetryMode mode) {
   setMotors(kRoute[0].left, kRoute[0].right, kRoute[0].durationMs);
 }
 
+void beginExploreScan(uint32_t now, const char* detail) {
+  explorePhase = ExplorePhase::Scan;
+  explorePhaseStartedMs = now;
+  exploreScanIndex = 0;
+  exploreInvalidDistanceReads = 0;
+  // A scan is deliberately stationary.  Obstacle avoidance resumes only
+  // after the turret returns to the forward (90 degree) position.
+  setMotors(0, 0, 0);
+  showStatus("EXPLORE", "range sweep");
+  sendRuntimeStatus("scanning", StopReason::None, activeRunId,
+                    activeRuntimeMode, detail);
+}
+
 void startExplore(uint32_t durationMs) {
   if (!prepareRuntime("explore")) return;
   const uint32_t boundedDuration = durationMs > kExploreMaxDurationMs ? kExploreMaxDurationMs : durationMs;
   exploreActive = true;
-  explorePhase = ExplorePhase::Forward;
+  explorePhase = ExplorePhase::Scan;
   explorePhaseStartedMs = millis();
   exploreDeadlineMs = explorePhaseStartedMs + boundedDuration;
   lastExploreCheckMs = explorePhaseStartedMs;
   exploreInvalidDistanceReads = 0;
+  exploreScanIndex = 0;
   markRuntimeStarted(String("explore-") + String(millis()), RuntimeMode::Explore,
-                     TelemetryMode::Explore, "EXPLORE", "forward / guarded");
-  orientTurret(90);
-  setMotors(kDriveForwardSpeed, kDriveForwardSpeed, 0);
+                     TelemetryMode::Explore, "EXPLORE", "scan / then forward");
+  beginExploreScan(millis(), "stationary front-cone sweep");
 }
 
 void startDriveStraight(uint32_t durationMs, int16_t speed) {
@@ -558,6 +585,20 @@ void updateExplore(uint32_t now) {
     stopRover(StopReason::ExploreComplete, "bounded explore complete");
     return;
   }
+  if (explorePhase == ExplorePhase::Scan) {
+    if (exploreScanIndex >= kExploreScanFrameCount) {
+      explorePhase = ExplorePhase::Forward;
+      explorePhaseStartedMs = now;
+      lastExploreCheckMs = now;
+      exploreInvalidDistanceReads = 0;
+      orientTurret(90);
+      setMotors(kDriveForwardSpeed, kDriveForwardSpeed, 0);
+      showStatus("EXPLORE", "forward / guarded");
+      sendRuntimeStatus("running", StopReason::None, activeRunId,
+                        activeRuntimeMode, "front-cone sweep complete; moving forward");
+    }
+    return;
+  }
   if (explorePhase == ExplorePhase::Forward && now - lastExploreCheckMs >= kExploreCheckPeriodMs) {
     lastExploreCheckMs = now;
     SensorReadings readings;
@@ -591,12 +632,7 @@ void updateExplore(uint32_t now) {
     return;
   }
   if (explorePhase == ExplorePhase::Turn && now - explorePhaseStartedMs >= kExploreTurnMs) {
-    explorePhase = ExplorePhase::Forward;
-    explorePhaseStartedMs = now;
-    lastExploreCheckMs = now;
-    exploreInvalidDistanceReads = 0;
-    setMotors(kDriveForwardSpeed, kDriveForwardSpeed, 0);
-    showStatus("EXPLORE", "forward / guarded");
+    beginExploreScan(now, "obstacle turn complete; resampling clearance");
   }
 }
 
@@ -635,7 +671,13 @@ void updateConnectionFailSafe(uint32_t now) {
 
 void sendTelemetry() {
   if (!webSocketConnected || !runtimeActive() || activeRunId.length() == 0) return;
-  const uint8_t angle = usesForwardTurret() ? 90U : static_cast<uint8_t>(scanIndex * 15U);
+  uint8_t angle = 90U;
+  if (scanOnlyActive) {
+    angle = static_cast<uint8_t>(scanIndex * 15U);
+  } else if (exploreActive && explorePhase == ExplorePhase::Scan) {
+    angle = static_cast<uint8_t>(kExploreScanStartDeg +
+                                 exploreScanIndex * kExploreScanStepDeg);
+  }
   orientTurret(angle);
   sendTelemetryFor(activeRunId, activeMode, angle, commandedLeft, commandedRight, commandDurationMs);
   if (scanOnlyActive) {
@@ -645,6 +687,8 @@ void sendTelemetry() {
       return;
     }
     ++scanIndex;
+  } else if (exploreActive && explorePhase == ExplorePhase::Scan) {
+    if (exploreScanIndex < kExploreScanFrameCount) ++exploreScanIndex;
   } else if (!usesForwardTurret()) {
     scanIndex = static_cast<uint8_t>((scanIndex + 1U) % kSweepFrameCount);
   }
