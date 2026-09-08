@@ -55,6 +55,7 @@ struct DiagnosticStep { int16_t left; int16_t right; uint32_t durationMs; };
 
 bool webSocketConnected = false;
 bool oledReady = false;
+uint8_t oledAddress = 0;
 // Inbound traffic only. Outbound telemetry must not masquerade as a heartbeat.
 uint32_t lastWebSocketActivityMs = 0;
 uint32_t lastTelemetryMs = 0;
@@ -237,6 +238,26 @@ void showStatus(const char* title, const char* detail = nullptr) {
   oled.setCursor(0, 48);
   if (detail != nullptr) oled.println(detail);
   oled.display();
+}
+
+bool i2cDevicePresent(uint8_t address) {
+  Wire.beginTransmission(address);
+  return Wire.endTransmission() == 0;
+}
+
+bool beginOled() {
+  // Most 128x64 modules use 0x3C; some ship strapped to 0x3D. Probe before
+  // initializing so a wrong address is visible in the serial log instead of
+  // looking like a generic blank-screen failure.
+  constexpr uint8_t candidates[] = {EchoAddresses::Oled, 0x3D};
+  for (const uint8_t address : candidates) {
+    if (!i2cDevicePresent(address)) continue;
+    if (oled.begin(SSD1306_SWITCHCAPVCC, address)) {
+      oledAddress = address;
+      return true;
+    }
+  }
+  return false;
 }
 
 void sendAck(bool ok, const String& message) {
@@ -749,12 +770,19 @@ void setup() {
   delay(1000);
   sensorSuite.begin();
   motorController.begin();
-  oledReady = oled.begin(SSD1306_SWITCHCAPVCC, EchoAddresses::Oled);
+  oledReady = beginOled();
   turretServo.setPeriodHertz(50);
   turretServo.attach(EchoPins::ServoSignal, 500, 2400);
   orientTurret(90);
   showStatus("READY", "safe standby");
   Serial.println("Echo-Maze fail-safe runtime firmware");
+  if (oledReady) {
+    Serial.printf("OLED: initialized at I2C address 0x%02X (SDA=%u, SCL=%u)\n",
+                  oledAddress, EchoPins::I2cSda, EchoPins::I2cScl);
+  } else {
+    Serial.printf("OLED: NOT FOUND at 0x%02X or 0x3D; check VDD/GND/SDA/SCL and run 'a' I2C scan\n",
+                  EchoAddresses::Oled);
+  }
   Serial.println(sensorSuite.imuAvailable() ? "MPU6050 detected (not used)" : "MPU6050 absent; using gyro-free mode");
   WiFi.mode(WIFI_STA);
   WiFi.begin(ECHO_WIFI_SSID, ECHO_WIFI_PASSWORD);
