@@ -19,6 +19,7 @@ import {
 import {
   DEFAULT_TELEMETRY_URL,
   EchoMazeSocket,
+  type CommandResult,
   type DashboardCommand,
   type RoverStatusMessage,
   type SocketStatus,
@@ -468,6 +469,21 @@ export function EchoMazeDashboard() {
 
   useEffect(() => {
     const unsubscribeStatus = socket.onStatus(setConnection);
+    const unsubscribeCommandResult = socket.onCommandResult((result: CommandResult) => {
+      const label = result.cmd ? result.cmd.replaceAll('_', ' ') : 'command';
+      if (!result.ok || (result.cmd && result.delivered_to === 0 && result.cmd !== 'stop')) {
+        const reason = result.error ?? 'no rover client is connected to the receiver';
+        setCommandNote(`${label} rejected: ${reason}`);
+        if (result.cmd !== 'stop' && result.cmd !== 'reset') {
+          setState((current) => ['LEARNING', 'VERIFYING', 'EXPLORING'].includes(current) ? 'IDLE' : current);
+          setProgress(72);
+        }
+        return;
+      }
+      if (result.cmd && result.cmd !== 'failsafe_status') {
+        setCommandNote(`${label} delivered to rover`);
+      }
+    });
     const unsubscribeTelemetry = socket.onTelemetry((message) => {
       setLiveTelemetry(parseLiveTelemetry(message));
       setLiveMap((current) => consumeTelemetry(current, message));
@@ -491,7 +507,7 @@ export function EchoMazeDashboard() {
     // Try the local receiver immediately so the live map is useful as soon as
     // the page opens. The button still allows a manual reconnect/disconnect.
     socket.connect();
-    return () => { unsubscribeStatus(); unsubscribeTelemetry(); unsubscribeRoverStatus(); socket.disconnect(); };
+    return () => { unsubscribeStatus(); unsubscribeCommandResult(); unsubscribeTelemetry(); unsubscribeRoverStatus(); socket.disconnect(); };
   }, []);
 
   useEffect(() => {
@@ -519,10 +535,31 @@ export function EchoMazeDashboard() {
     return () => window.clearInterval(timer);
   }, [state]);
 
+  // Firmware deliberately stops active motion when it hasn't heard from the
+  // operator for two seconds. Browsers cannot send a WebSocket control-frame
+  // ping, so keep the safety channel alive with the explicit, non-motion
+  // status command while a bounded field function is active.
+  useEffect(() => {
+    if (connection !== 'connected' || !['LEARNING', 'VERIFYING', 'EXPLORING'].includes(state)) return;
+    const heartbeat = window.setInterval(() => {
+      socket.send('failsafe_status', { heartbeat: true });
+    }, 750);
+    return () => window.clearInterval(heartbeat);
+  }, [connection, state]);
+
   const command = (next: DashboardCommand, durationMs?: number, payload: Record<string, unknown> = {}) => {
     const bounded = next === 'explore' || next === 'drive_straight' || next === 'scan_only';
     const commandPayload = bounded ? { ...payload, duration_ms: durationMs ?? 10000 } : payload;
     const delivered = socket.send(next, Object.keys(commandPayload).length ? commandPayload : undefined);
+    // Never put the UI into a busy state when the browser cannot even write
+    // to the receiver. This prevents a failed click from locking every field
+    // function until a full page reload.
+    if (!delivered && next !== 'stop' && next !== 'reset') {
+      setCommandNote('Command not sent: receiver link is unavailable; reconnect and try again');
+      setState('IDLE');
+      setProgress(72);
+      return;
+    }
     if (next === 'learn' || next === 'verify' || next === 'reset') setVerificationReviewOpen(false);
     if (next === 'learn') {
       setBaselineLiveMap(null);
