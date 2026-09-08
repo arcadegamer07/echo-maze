@@ -16,6 +16,11 @@ not telemetry and is never appended to run logs. It carries a machine-readable
 `state`, `reason`, optional `cause`, `runtime_mode`, and `recommended_action`
 so the dashboard can explain a safe stop to an operator.
 
+While a bounded field function is active, the dashboard sends the non-motion
+`failsafe_status` command about every 750 ms. This is the operator heartbeat
+required by the firmware's two-second WebSocket loss watchdog; it does not
+drive motors or change the selected runtime mode.
+
 Use `mode: "test"` with `source: "fixture"` for connectivity checks before
 all sensors are wired. Test packets are never used to build a baseline, map,
 or ML model. Use `mode: "learn"`, `mode: "verify"`, or `mode: "explore"` only
