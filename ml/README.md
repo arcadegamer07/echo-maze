@@ -48,11 +48,13 @@ telemetry remains connectivity-only:
 python -m ml.send_command explore --duration-ms 10000
 ```
 
-The firmware clamps the requested duration to 30 seconds.  During the run it
-keeps the turret facing forward, checks the ultrasonic and IR obstacle inputs,
-reverses briefly and pivots when the path is blocked, then resumes forward
-motion.  A WebSocket disconnect or the deadline stops the motors.  Stop it
-manually with:
+The firmware clamps the requested duration to 30 seconds.  At the beginning of
+Explore (and again after each avoidance turn) it stops briefly and sweeps the
+turret through a safe front cone, 60--120 degrees in 15-degree steps.  It then
+returns to 90 degrees, drives forward while checking the ultrasonic and IR
+obstacle inputs, reverses briefly and pivots when the path is blocked, and
+resamples the cone before moving again.  A WebSocket disconnect or the
+deadline stops the motors.  Stop it manually with:
 
 ```powershell
 python -m ml.send_command stop
