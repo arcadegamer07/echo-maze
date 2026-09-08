@@ -674,6 +674,10 @@ void sendTelemetry() {
   uint8_t angle = 90U;
   if (scanOnlyActive) {
     angle = static_cast<uint8_t>(scanIndex * 15U);
+  } else if (routeActive) {
+    // Learn and Verify use the repeatable full sweep.  Keep this separate
+    // from Explore: Explore has its own stationary front-cone scan.
+    angle = static_cast<uint8_t>(scanIndex * 15U);
   } else if (exploreActive && explorePhase == ExplorePhase::Scan) {
     angle = static_cast<uint8_t>(kExploreScanStartDeg +
                                  exploreScanIndex * kExploreScanStepDeg);
@@ -689,6 +693,8 @@ void sendTelemetry() {
     ++scanIndex;
   } else if (exploreActive && explorePhase == ExplorePhase::Scan) {
     if (exploreScanIndex < kExploreScanFrameCount) ++exploreScanIndex;
+  } else if (routeActive) {
+    scanIndex = static_cast<uint8_t>((scanIndex + 1U) % kSweepFrameCount);
   } else if (!usesForwardTurret()) {
     scanIndex = static_cast<uint8_t>((scanIndex + 1U) % kSweepFrameCount);
   }
