@@ -34,6 +34,7 @@ import {
   runMetadata,
   scores,
   telemetry,
+  type ScoreSet,
   type RunState,
 } from '@/lib/demo-model';
 import { DashboardPanel, PanelBody } from './DashboardPanel';
@@ -110,6 +111,75 @@ function trendSample(message: TelemetryMessage): TelemetryTrendSample {
   };
 }
 
+function finiteSamples(samples: TelemetryTrendSample[], field: 'distanceCm' | 'temperatureC') {
+  return samples.map((sample) => sample[field]).filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+}
+
+function average(values: number[]) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, value));
+}
+
+/**
+ * A transparent live evidence delta used until a persisted sklearn score
+ * artifact is connected to the WebSocket. It compares the actual Learn and
+ * Verify range/temperature streams; it never pretends missing IMU data is a
+ * zero-vibration measurement.
+ */
+function deriveLiveScores(
+  baselineSamples: TelemetryTrendSample[],
+  currentSamples: TelemetryTrendSample[],
+  baselineMap: LiveMapState | null,
+  currentMap: LiveMapState,
+): ScoreSet {
+  const liveCurrent = currentMap.latest?.source === 'live' && currentSamples.length > 0;
+  if (!liveCurrent) return scores;
+  if (!baselineMap || baselineSamples.length < 2) {
+    return {
+      geometry: 0, tilt: 0, vibration: 0, thermal: 0, total: 0,
+      source: 'live-evidence',
+      note: 'Capture a Learn run before Verify to establish a comparison baseline.',
+    };
+  }
+
+  const baselineRanges = finiteSamples(baselineSamples, 'distanceCm');
+  const currentRanges = finiteSamples(currentSamples, 'distanceCm');
+  let geometry = 0;
+  if (baselineRanges.length && currentRanges.length) {
+    const pairCount = Math.min(80, Math.max(baselineRanges.length, currentRanges.length));
+    let absoluteDelta = 0;
+    for (let index = 0; index < pairCount; index += 1) {
+      const baselineIndex = Math.round(index * (baselineRanges.length - 1) / Math.max(1, pairCount - 1));
+      const currentIndex = Math.round(index * (currentRanges.length - 1) / Math.max(1, pairCount - 1));
+      absoluteDelta += Math.abs(baselineRanges[baselineIndex] - currentRanges[currentIndex]);
+    }
+    const baselineMean = average(baselineRanges) ?? 1;
+    geometry = clampScore((absoluteDelta / pairCount) / Math.max(25, baselineMean * 0.35) * 100);
+  }
+  // New close-range/avoidance evidence is a meaningful geometric change even
+  // when the paired sweep has very few valid range samples.
+  geometry = clampScore(geometry + Math.max(0, currentMap.dangerCount - baselineMap.dangerCount) * 8);
+
+  const baselineTemperature = average(finiteSamples(baselineSamples, 'temperatureC'));
+  const currentTemperature = average(finiteSamples(currentSamples, 'temperatureC'));
+  const thermal = baselineTemperature === null || currentTemperature === null
+    ? 0
+    : clampScore(Math.abs(currentTemperature - baselineTemperature) / 3 * 100);
+  const total = clampScore(geometry * 0.7 + thermal * 0.3);
+  return {
+    geometry: Number(geometry.toFixed(1)),
+    tilt: 0,
+    vibration: 0,
+    thermal: Number(thermal.toFixed(1)),
+    total: Number(total.toFixed(1)),
+    source: 'live-evidence',
+    note: 'Live range and temperature deltas; IMU tilt/vibration unavailable in this hardware build.',
+  };
+}
+
 type ThemeMode = 'draft' | 'reproduction';
 
 function Header({ connection, onLink, onReport, theme, onToggleTheme }: { connection: SocketStatus; onLink: () => void; onReport: () => void; theme: ThemeMode; onToggleTheme: () => void }) {
@@ -143,14 +213,17 @@ function Header({ connection, onLink, onReport, theme, onToggleTheme }: { connec
   );
 }
 
-function MissionStrip({ connection, packetCount, state }: { connection: SocketStatus; packetCount: number; state: RunState }) {
+function MissionStrip({ connection, packetCount, state, activeScores }: { connection: SocketStatus; packetCount: number; state: RunState; activeScores: ScoreSet }) {
+  const mapAgreement = activeScores.source === 'live-evidence' && activeScores.note?.startsWith('Capture a Learn')
+    ? '—'
+    : `${Math.max(0, 100 - activeScores.geometry).toFixed(1)}%`;
   return (
     <section className="mission-strip" aria-label="Mission summary">
       <div className="mission-primary">
         <span>Active survey</span>
         <strong>{runMetadata.id}</strong>
       </div>
-      <div><span>Map agreement</span><strong>92.4<small>%</small></strong></div>
+      <div><span>Map agreement</span><strong>{mapAgreement === '—' ? mapAgreement : <>{mapAgreement.replace('%', '')}<small>%</small></>}</strong></div>
       <div><span>Pose confidence</span><strong>{pose.confidence.toFixed(1)}<small>%</small></strong></div>
       <div><span>Frames received</span><strong>{packetCount.toLocaleString()}</strong></div>
       <div><span>System state</span><strong className="mission-state"><i />{connection === 'connected' ? state : 'Local rehearsal'}</strong></div>
@@ -173,7 +246,7 @@ function RunFacts() {
   );
 }
 
-function EvidencePulse() {
+function EvidencePulse({ activeScores }: { activeScores: ScoreSet }) {
   const pulsePath = 'M0,69 C18,62 28,65 44,53 S72,61 88,45 S116,49 132,38 S158,55 176,34 S208,41 224,27 S255,35 276,21 S310,30 336,14';
   return (
     <Panel title="Evidence trace" code="LAST 60 SEC">
@@ -186,14 +259,14 @@ function EvidencePulse() {
         </svg>
         <div className="pulse-footer">
           <span><Activity size={14} /> Stream health <b>99.8%</b></span>
-          <span>Window score <b>{scores.total}/100</b></span>
+          <span>Window score <b>{activeScores.total}/100</b></span>
         </div>
       </PanelBody>
     </Panel>
   );
 }
 
-function Overview({ state, progress, connected, liveTelemetry, packetCount, onCommand, onView, ghostOn, onToggleGhost, frame, liveMap, telemetryHistory }: {
+function Overview({ state, progress, connected, liveTelemetry, packetCount, onCommand, onView, ghostOn, onToggleGhost, frame, liveMap, telemetryHistory, activeScores }: {
   state: RunState;
   progress: number;
   connected: boolean;
@@ -206,6 +279,7 @@ function Overview({ state, progress, connected, liveTelemetry, packetCount, onCo
   frame: number;
   liveMap: LiveMapState;
   telemetryHistory: TelemetryTrendSample[];
+  activeScores: ScoreSet;
 }) {
   const visibleTelemetry = liveTelemetry ?? telemetry;
   const hasLiveMap = liveMap.latest?.source === 'live' && liveMap.packetCount > 0;
@@ -236,7 +310,7 @@ function Overview({ state, progress, connected, liveTelemetry, packetCount, onCo
         </Panel>
         <div className="overview-rail">
           <ControlPanel state={state} progress={progress} connected={connected} onCommand={onCommand} />
-          <ScorePanel scores={scores} />
+          <ScorePanel scores={activeScores} />
         </div>
       </div>
       <LiveTraceView state={liveMap} connected={connected} />
@@ -245,7 +319,7 @@ function Overview({ state, progress, connected, liveTelemetry, packetCount, onCo
         <PointCloudView points={points} pose={pose} scanning={state === 'LEARNING' || state === 'VERIFYING' || state === 'EXPLORING'} />
         <TelemetryPanel telemetry={visibleTelemetry} connected={connected} packetCount={packetCount} source={liveTelemetry ? 'ESP32 / live' : 'Recorded fixture'} />
       </div>
-      <div className="overview-facts"><RunFacts /><EvidencePulse /></div>
+      <div className="overview-facts"><RunFacts /><EvidencePulse activeScores={activeScores} /></div>
       <div className="footer-strip">
         <span><Check size={13} /> Local model ready</span>
         <span>{connected ? 'Receiving live frames' : 'Awaiting hardware link'}</span>
@@ -377,6 +451,8 @@ export function EchoMazeDashboard() {
   const [liveTelemetry, setLiveTelemetry] = useState<ReturnType<typeof parseLiveTelemetry> | null>(null);
   const [liveMap, setLiveMap] = useState<LiveMapState>(() => createLiveMapState());
   const [telemetryHistory, setTelemetryHistory] = useState<TelemetryTrendSample[]>([]);
+  const [baselineLiveMap, setBaselineLiveMap] = useState<LiveMapState | null>(null);
+  const [baselineTelemetryHistory, setBaselineTelemetryHistory] = useState<TelemetryTrendSample[]>([]);
   const [roverStatus, setRoverStatus] = useState<RoverStatusMessage | null>(null);
   const [packetCount, setPacketCount] = useState(1842);
   const [ghostOn, setGhostOn] = useState(true);
@@ -385,6 +461,10 @@ export function EchoMazeDashboard() {
   const [verificationReviewOpen, setVerificationReviewOpen] = useState(false);
   const previousState = useRef<RunState>('IDLE');
   const [theme, setTheme] = useState<ThemeMode>('reproduction');
+  const activeScores = useMemo(
+    () => deriveLiveScores(baselineTelemetryHistory, telemetryHistory, baselineLiveMap, liveMap),
+    [baselineLiveMap, baselineTelemetryHistory, liveMap, telemetryHistory],
+  );
 
   useEffect(() => {
     const unsubscribeStatus = socket.onStatus(setConnection);
@@ -444,6 +524,16 @@ export function EchoMazeDashboard() {
     const commandPayload = bounded ? { ...payload, duration_ms: durationMs ?? 10000 } : payload;
     const delivered = socket.send(next, Object.keys(commandPayload).length ? commandPayload : undefined);
     if (next === 'learn' || next === 'verify' || next === 'reset') setVerificationReviewOpen(false);
+    if (next === 'learn') {
+      setBaselineLiveMap(null);
+      setBaselineTelemetryHistory([]);
+    }
+    if (next === 'verify') {
+      // Preserve the completed Learn evidence before clearing the live buffers
+      // for the new Verify run. This is what makes successive runs differ.
+      setBaselineLiveMap(liveMap);
+      setBaselineTelemetryHistory(telemetryHistory);
+    }
     if (next === 'learn' || next === 'verify' || next === 'explore' || next === 'drive_straight' || next === 'scan_only' || next === 'reset') {
       setLiveMap(resetLiveMap());
       setTelemetryHistory([]);
@@ -493,19 +583,19 @@ export function EchoMazeDashboard() {
             <div><div className="eyebrow">Echo—Maze / {connection === 'connected' ? 'live bus' : 'local bus'}</div><h1>{titles[view][0]}</h1><p>{titles[view][1]} — {commandNote}.</p></div>
             <div className={`run-chip ${state === 'VERIFYING' || state === 'STOPPED' ? 'review' : ''}`}><span className="live-dot" />{state === 'IDLE' ? 'Ready for command' : state === 'STOPPED' ? 'Run halted' : `${state} / ${runMetadata.id}`}</div>
           </div>
-          <MissionStrip connection={connection} packetCount={packetCount} state={state} />
-          {view === 'overview' && <Overview state={state} progress={progress} connected={connection === 'connected'} liveTelemetry={liveTelemetry} packetCount={packetCount} onCommand={command} onView={setView} ghostOn={ghostOn} onToggleGhost={() => setGhostOn((value) => !value)} frame={frame} liveMap={liveMap} telemetryHistory={telemetryHistory} />}
+          <MissionStrip connection={connection} packetCount={packetCount} state={state} activeScores={activeScores} />
+          {view === 'overview' && <Overview state={state} progress={progress} connected={connection === 'connected'} liveTelemetry={liveTelemetry} packetCount={packetCount} onCommand={command} onView={setView} ghostOn={ghostOn} onToggleGhost={() => setGhostOn((value) => !value)} frame={frame} liveMap={liveMap} telemetryHistory={telemetryHistory} activeScores={activeScores} />}
           {view === 'telemetry' && <TelemetryWorkspace connected={connection === 'connected'} liveTelemetry={liveTelemetry} packetCount={packetCount} frame={frame} liveMap={liveMap} />}
           {view === 'analysis' && <Analysis ghostOn={ghostOn} onToggleGhost={() => setGhostOn((value) => !value)} liveMap={liveMap} />}
           {view === 'operations' && <OperationsWorkspace connection={connection} state={state} liveMap={liveMap} telemetryHistory={telemetryHistory} roverStatus={roverStatus} onCommand={command} />}
-          {view === 'report' && <FinalReport metadata={runMetadata} scores={scores} onExport={() => setCommandNote('Report staged for export')} />}
+          {view === 'report' && <FinalReport metadata={runMetadata} scores={activeScores} onExport={() => setCommandNote('Report staged for export')} />}
         </main>
       </div>
       {noticeOpen && <div className="modal-shade"><div className="privacy-modal" role="dialog" aria-labelledby="privacy-title"><h2 id="privacy-title">Connection boundary</h2><p>The console can run with deterministic replay data or connect to the laptop receiver at <code>{DEFAULT_TELEMETRY_URL}</code>. Raw telemetry remains in the local Echo-Maze workspace.</p><button onClick={() => setNoticeOpen(false)}><Check size={13} /> Close notice</button></div></div>}
       <VerificationReviewModal
         open={verificationReviewOpen}
         status={state === 'STOPPED' ? 'STOPPED' : 'COMPLETE'}
-        scores={scores}
+        scores={activeScores}
         liveMap={liveMap}
         onClose={() => setVerificationReviewOpen(false)}
         onOpenReport={() => { setVerificationReviewOpen(false); setView('report'); }}

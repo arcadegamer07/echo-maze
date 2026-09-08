@@ -6,8 +6,9 @@ function severityFor(score: number) {
   return score >= 65 ? 'HIGH' : score >= 35 ? 'MODERATE' : 'LOW';
 }
 
-function featureLabel(value: number) {
-  return value === 0 ? 'offline / unavailable' : `${value}/100 deviation`;
+function featureLabel(label: string, value: number) {
+  const offline = (label === 'Tilt' || label === 'Vibration') && value === 0;
+  return offline ? 'offline / unavailable' : `${value}/100 deviation`;
 }
 
 export function VerificationReviewModal({
@@ -29,6 +30,10 @@ export function VerificationReviewModal({
   const severity = severityFor(scores.total);
   const liveEvidence = liveMap.latest?.source === 'live' && liveMap.packetCount > 0;
   const runId = liveMap.runId ?? 'EM-0427-VR';
+  const sourceLabel = scores.source === 'live-evidence' ? 'Live evidence delta' : scores.source === 'ml' ? 'Isolation Forest / v1' : 'Isolation Forest / fixture';
+  const decisionTitle = scores.source === 'live-evidence' && scores.note?.startsWith('Capture a Learn')
+    ? 'Baseline required before scoring'
+    : severity === 'LOW' ? 'No strong structural change signal' : 'Evidence needs human review';
   return (
     <div className="modal-shade review-shade" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div className="review-modal" role="dialog" aria-modal="true" aria-labelledby="verification-review-title">
@@ -42,7 +47,7 @@ export function VerificationReviewModal({
         </div>
 
         <div className="review-model-banner">
-          <div><span>MODEL</span><strong>Isolation Forest / v1</strong></div>
+          <div><span>SCORING ENGINE</span><strong>{sourceLabel}</strong></div>
           <div><span>INPUT</span><strong>{liveEvidence ? 'Live telemetry captured' : 'Local rehearsal fixture'}</strong></div>
           <div><span>VERIFY RUN</span><strong>{runId}</strong></div>
         </div>
@@ -54,14 +59,16 @@ export function VerificationReviewModal({
             <b>{severity}</b>
           </div>
           <div className="review-decision-copy">
-            <strong>{severity === 'LOW' ? 'No strong structural change signal' : 'Evidence needs human review'}</strong>
-            <p>Isolation Forest isolates unusual rows quickly. A higher score means the Verify features look less like the Learn baseline; it is an early-warning score, not a proof of damage.</p>
+            <strong>{decisionTitle}</strong>
+            <p>{scores.source === 'live-evidence'
+              ? 'This live score is derived from the actual Learn → Verify range and temperature deltas. It changes with the received run; IMU tilt/vibration remain unavailable.'
+              : 'Isolation Forest isolates unusual rows quickly. A higher score means the Verify features look less like the Learn baseline; it is an early-warning score, not a proof of damage.'}</p>
           </div>
         </div>
 
         <div className="review-columns">
-          <div className="review-run-block baseline"><span>01 / LEARN</span><strong>Healthy reference</strong><p>Model learns the normal geometry, vibration, tilt, and temperature pattern from this run.</p><i><CheckCircle2 size={14} /> baseline locked</i></div>
-          <div className="review-run-block current"><span>02 / VERIFY</span><strong>Current inspection</strong><p>Each feature window is sent through the trained forest and compared with the learned pattern.</p><i><ShieldCheck size={14} /> {status === 'COMPLETE' ? 'capture complete' : 'operator stopped capture'}</i></div>
+          <div className="review-run-block baseline"><span>01 / LEARN</span><strong>Healthy reference</strong><p>{scores.source === 'live-evidence' ? 'The range and temperature stream captured here is the comparison reference.' : 'Model learns the normal geometry, vibration, tilt, and temperature pattern from this run.'}</p><i><CheckCircle2 size={14} /> baseline locked</i></div>
+          <div className="review-run-block current"><span>02 / VERIFY</span><strong>Current inspection</strong><p>{scores.source === 'live-evidence' ? 'This run is paired against the preserved Learn evidence and rescored as frames arrive.' : 'Each feature window is sent through the trained forest and compared with the learned pattern.'}</p><i><ShieldCheck size={14} /> {status === 'COMPLETE' ? 'capture complete' : 'operator stopped capture'}</i></div>
         </div>
 
         <div className="review-feature-section">
@@ -73,7 +80,7 @@ export function VerificationReviewModal({
             ['Thermal', scores.thermal],
           ] as Array<[string, number]>).map(([label, value]) => (
             <div className="review-feature" key={label}>
-              <span>{label}</span><div><i style={{ width: `${Math.min(100, value)}%` }} /></div><strong>{featureLabel(value)}</strong>
+              <span>{label}</span><div><i style={{ width: `${Math.min(100, value)}%` }} /></div><strong>{featureLabel(label, value)}</strong>
             </div>
           ))}
         </div>

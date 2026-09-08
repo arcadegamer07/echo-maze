@@ -360,6 +360,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 .mission-trend.empty strong { color: var(--muted); font-size: 11px; font-weight: 550; }
 .mission-trend.empty small { margin-top: 8px; color: var(--muted-2); font-size: 9px; line-height: 1.45; }
 .mission-analytics-note { padding: 11px 14px; border-top: 1px solid var(--line-soft); color: var(--muted-2); font-size: 9px; line-height: 1.5; }
+.score-note { margin-top: 12px; padding: 9px 10px; border-top: 1px solid var(--line-soft); color: var(--muted-2); font-size: 9px; line-height: 1.45; }
 .operations-evidence-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--panel-gap); align-items: start; }
 .operations-evidence-grid > * { min-width: 0; }
 .trace-path { fill: none; stroke: var(--signal); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
