@@ -1,16 +1,31 @@
 export type SocketStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
 export type TelemetryMessage = Record<string, unknown> & { run_id?: string; mode?: string; timestamp?: number };
-export type DashboardCommand = 'learn' | 'verify' | 'stop' | 'reset' | 'run_route' | 'explore';
+export type RoverStatusMessage = Record<string, unknown> & {
+  event: 'rover_status';
+  state?: string;
+  reason?: string;
+  cause?: string;
+  detail?: string;
+  recommended_action?: string;
+  runtime_mode?: string;
+  run_id?: string;
+  timestamp?: number;
+};
+export type DashboardCommand =
+  | 'learn' | 'verify' | 'stop' | 'reset' | 'run_route' | 'explore'
+  | 'drive_straight' | 'scan_only' | 'motor_diagnostic' | 'failsafe_status';
 export const DEFAULT_TELEMETRY_URL = (import.meta.env.VITE_TELEMETRY_URL as string | undefined) ?? 'ws://127.0.0.1:8765';
 
 type StatusListener = (status: SocketStatus) => void;
 type TelemetryListener = (message: TelemetryMessage) => void;
+type RoverStatusListener = (status: RoverStatusMessage) => void;
 
 export class EchoMazeSocket {
   status: SocketStatus = 'disconnected';
   private socket?: WebSocket;
   private statusListeners = new Set<StatusListener>();
   private telemetryListeners = new Set<TelemetryListener>();
+  private roverStatusListeners = new Set<RoverStatusListener>();
 
   onStatus(listener: StatusListener) {
     this.statusListeners.add(listener);
@@ -21,6 +36,11 @@ export class EchoMazeSocket {
   onTelemetry(listener: TelemetryListener) {
     this.telemetryListeners.add(listener);
     return () => this.telemetryListeners.delete(listener);
+  }
+
+  onRoverStatus(listener: RoverStatusListener) {
+    this.roverStatusListeners.add(listener);
+    return () => this.roverStatusListeners.delete(listener);
   }
 
   private setStatus(status: SocketStatus) {
@@ -43,6 +63,11 @@ export class EchoMazeSocket {
       this.socket.onmessage = (event) => {
         try {
           const message = JSON.parse(String(event.data));
+          if (message && typeof message === 'object' && !Array.isArray(message)
+            && message.event === 'rover_status') {
+            this.roverStatusListeners.forEach((listener) => listener(message as RoverStatusMessage));
+            return;
+          }
           if (message && typeof message === 'object' && !Array.isArray(message)
             && typeof message.run_id === 'string' && message.motor && message.scan) {
             this.telemetryListeners.forEach((listener) => listener(message as TelemetryMessage));

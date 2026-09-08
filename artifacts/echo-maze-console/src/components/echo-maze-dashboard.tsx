@@ -11,6 +11,7 @@ import {
   Link2,
   Moon,
   Radio,
+  SlidersHorizontal,
   Sun,
   Wifi,
   WifiOff,
@@ -18,6 +19,8 @@ import {
 import {
   DEFAULT_TELEMETRY_URL,
   EchoMazeSocket,
+  type DashboardCommand,
+  type RoverStatusMessage,
   type SocketStatus,
   type TelemetryMessage,
 } from '@/lib/echo-maze-socket';
@@ -42,13 +45,16 @@ import { OccupancyGridView } from './OccupancyGridView';
 import { PointCloudView } from './PointCloudView';
 import { LiveTraceView } from './LiveTraceView';
 import { LiveLineMap } from './LiveLineMap';
+import { MissionAnalytics, type TelemetryTrendSample } from './MissionAnalytics';
+import { OperationsConsole } from './OperationsConsole';
+import { ScanVolume3D } from './ScanVolume3D';
 import { VerificationReviewModal } from './VerificationReviewModal';
 import { ScorePanel } from './ScorePanel';
 import { TelemetryPanel } from './TelemetryPanel';
 import { TimeMachineSlider } from './TimeMachineSlider';
 import { consumeTelemetry, createLiveMapState, poseHeadingDeg, resetLiveMap, type LiveMapState } from '@/lib/live-mapping';
 
-type View = 'overview' | 'telemetry' | 'analysis' | 'report';
+type View = 'overview' | 'telemetry' | 'analysis' | 'operations' | 'report';
 const socket = new EchoMazeSocket();
 
 function Panel({ title, code, children, className = '' }: { title: string; code?: string; children: ReactNode; className?: string }) {
@@ -88,6 +94,19 @@ function parseLiveTelemetry(message: TelemetryMessage) {
     ultrasonic: number(scan.distance_cm, telemetry.ultrasonic),
     ir: number(message.ir, telemetry.ir),
     temperature: number(message.temp_c, telemetry.temperature),
+  };
+}
+
+function trendSample(message: TelemetryMessage): TelemetryTrendSample {
+  const motor = (message.motor ?? {}) as Record<string, unknown>;
+  const scan = (message.scan ?? {}) as Record<string, unknown>;
+  const numberOrNull = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
+  return {
+    timestamp: numberOrNull(message.timestamp) ?? Date.now(),
+    distanceCm: numberOrNull(scan.distance_cm ?? scan.distance),
+    temperatureC: numberOrNull(message.temp_c),
+    leftSpeed: numberOrNull(motor.left_speed) ?? 0,
+    rightSpeed: numberOrNull(motor.right_speed) ?? 0,
   };
 }
 
@@ -174,18 +193,19 @@ function EvidencePulse() {
   );
 }
 
-function Overview({ state, progress, connected, liveTelemetry, packetCount, onCommand, onView, ghostOn, onToggleGhost, frame, liveMap }: {
+function Overview({ state, progress, connected, liveTelemetry, packetCount, onCommand, onView, ghostOn, onToggleGhost, frame, liveMap, telemetryHistory }: {
   state: RunState;
   progress: number;
   connected: boolean;
   liveTelemetry: ReturnType<typeof parseLiveTelemetry> | null;
   packetCount: number;
-  onCommand: (command: 'learn' | 'verify' | 'explore' | 'stop' | 'reset', durationMs?: number) => void;
+  onCommand: (command: DashboardCommand, durationMs?: number, payload?: Record<string, unknown>) => void;
   onView: (view: View) => void;
   ghostOn: boolean;
   onToggleGhost: () => void;
   frame: number;
   liveMap: LiveMapState;
+  telemetryHistory: TelemetryTrendSample[];
 }) {
   const visibleTelemetry = liveTelemetry ?? telemetry;
   const hasLiveMap = liveMap.latest?.source === 'live' && liveMap.packetCount > 0;
@@ -220,6 +240,7 @@ function Overview({ state, progress, connected, liveTelemetry, packetCount, onCo
         </div>
       </div>
       <LiveTraceView state={liveMap} connected={connected} />
+      <MissionAnalytics samples={telemetryHistory} liveMap={liveMap} />
       <div className="overview-lower">
         <PointCloudView points={points} pose={pose} scanning={state === 'LEARNING' || state === 'VERIFYING' || state === 'EXPLORING'} />
         <TelemetryPanel telemetry={visibleTelemetry} connected={connected} packetCount={packetCount} source={liveTelemetry ? 'ESP32 / live' : 'Recorded fixture'} />
@@ -317,6 +338,36 @@ function Analysis({ ghostOn, onToggleGhost, liveMap }: { ghostOn: boolean; onTog
   );
 }
 
+function OperationsWorkspace({
+  connection,
+  state,
+  liveMap,
+  telemetryHistory,
+  onCommand,
+  roverStatus,
+}: {
+  connection: SocketStatus;
+  state: RunState;
+  liveMap: LiveMapState;
+  telemetryHistory: TelemetryTrendSample[];
+  onCommand: (command: DashboardCommand, durationMs?: number, payload?: Record<string, unknown>) => void;
+  roverStatus: RoverStatusMessage | null;
+}) {
+  return (
+    <div className="view-stack">
+      <div className="workspace-heading">
+        <div><div className="eyebrow">Runtime operations</div><h2>Field functions</h2><p>Bounded mission, motion, sensing, and service contracts for a sellable rover platform.</p></div>
+        <div className="workspace-stamp"><SlidersHorizontal size={15} /><span>Safety-gated controls</span><strong>{connection === 'connected' ? 'Receiver linked' : 'Link required'}</strong></div>
+      </div>
+      <OperationsConsole connection={connection} state={state} liveMap={liveMap} roverStatus={roverStatus} onCommand={onCommand} />
+      <div className="operations-evidence-grid">
+        <ScanVolume3D state={liveMap} />
+        <MissionAnalytics samples={telemetryHistory} liveMap={liveMap} />
+      </div>
+    </div>
+  );
+}
+
 export function EchoMazeDashboard() {
   const [view, setView] = useState<View>('overview');
   const [state, setState] = useState<RunState>('IDLE');
@@ -325,6 +376,8 @@ export function EchoMazeDashboard() {
   const [connection, setConnection] = useState<SocketStatus>('disconnected');
   const [liveTelemetry, setLiveTelemetry] = useState<ReturnType<typeof parseLiveTelemetry> | null>(null);
   const [liveMap, setLiveMap] = useState<LiveMapState>(() => createLiveMapState());
+  const [telemetryHistory, setTelemetryHistory] = useState<TelemetryTrendSample[]>([]);
+  const [roverStatus, setRoverStatus] = useState<RoverStatusMessage | null>(null);
   const [packetCount, setPacketCount] = useState(1842);
   const [ghostOn, setGhostOn] = useState(true);
   const [frame, setFrame] = useState(0);
@@ -338,12 +391,27 @@ export function EchoMazeDashboard() {
     const unsubscribeTelemetry = socket.onTelemetry((message) => {
       setLiveTelemetry(parseLiveTelemetry(message));
       setLiveMap((current) => consumeTelemetry(current, message));
+      setTelemetryHistory((current) => [...current, trendSample(message)].slice(-360));
       setPacketCount((count) => count + 1);
+    });
+    const unsubscribeRoverStatus = socket.onRoverStatus((status) => {
+      setRoverStatus(status);
+      const normalized = String(status.state ?? '').toUpperCase();
+      const stateMap: Partial<Record<string, RunState>> = {
+        LEARN: 'LEARNING', LEARNING: 'LEARNING',
+        VERIFY: 'VERIFYING', VERIFYING: 'VERIFYING',
+        EXPLORE: 'EXPLORING', EXPLORING: 'EXPLORING',
+        COMPLETE: 'COMPLETE', READY: 'IDLE', ONLINE: 'IDLE',
+        STOPPED: 'STOPPED', FAILSAFE: 'STOPPED', EMERGENCY_STOP: 'STOPPED',
+      };
+      const nextState = stateMap[normalized];
+      if (nextState) setState(nextState);
+      if (status.reason) setCommandNote(status.reason);
     });
     // Try the local receiver immediately so the live map is useful as soon as
     // the page opens. The button still allows a manual reconnect/disconnect.
     socket.connect();
-    return () => { unsubscribeStatus(); unsubscribeTelemetry(); socket.disconnect(); };
+    return () => { unsubscribeStatus(); unsubscribeTelemetry(); unsubscribeRoverStatus(); socket.disconnect(); };
   }, []);
 
   useEffect(() => {
@@ -371,15 +439,21 @@ export function EchoMazeDashboard() {
     return () => window.clearInterval(timer);
   }, [state]);
 
-  const command = (next: 'learn' | 'verify' | 'explore' | 'stop' | 'reset', durationMs?: number) => {
-    const delivered = socket.send(next, next === 'explore' ? { duration_ms: durationMs ?? 10000 } : undefined);
+  const command = (next: DashboardCommand, durationMs?: number, payload: Record<string, unknown> = {}) => {
+    const bounded = next === 'explore' || next === 'drive_straight' || next === 'scan_only';
+    const commandPayload = bounded ? { ...payload, duration_ms: durationMs ?? 10000 } : payload;
+    const delivered = socket.send(next, Object.keys(commandPayload).length ? commandPayload : undefined);
     if (next === 'learn' || next === 'verify' || next === 'reset') setVerificationReviewOpen(false);
-    if (next === 'learn' || next === 'verify') setLiveMap(resetLiveMap());
-    if (next === 'explore') setLiveMap(resetLiveMap());
-    if (next === 'reset') setLiveMap(resetLiveMap());
+    if (next === 'learn' || next === 'verify' || next === 'explore' || next === 'drive_straight' || next === 'scan_only' || next === 'reset') {
+      setLiveMap(resetLiveMap());
+      setTelemetryHistory([]);
+    }
     if (next === 'learn') { setState('LEARNING'); setProgress(14); setCommandNote(delivered ? 'Baseline command sent to rover' : 'Baseline capture staged locally'); }
     if (next === 'verify') { setState('VERIFYING'); setProgress(58); setCommandNote(delivered ? 'Verification command sent to rover' : 'Verification staged locally'); }
     if (next === 'explore') { setState('EXPLORING'); setProgress(0); setCommandNote(delivered ? 'Guarded exploration sent to rover' : 'Exploration requires a live receiver'); }
+    if (next === 'drive_straight') { setState('EXPLORING'); setProgress(0); setCommandNote(delivered ? 'Bounded straight-drive check sent to rover' : 'Straight-drive check requires a live receiver'); }
+    if (next === 'scan_only') { setState('EXPLORING'); setProgress(0); setCommandNote(delivered ? 'Stationary scan sent to rover' : 'Scan-only requires a live receiver'); }
+    if (next === 'motor_diagnostic') { setState('EXPLORING'); setProgress(0); setCommandNote(delivered ? 'Motor diagnostic sent to rover' : 'Motor diagnostic requires a live receiver'); }
     if (next === 'stop') { setState('STOPPED'); setCommandNote('Run halted by operator'); }
     if (next === 'reset') { setState('IDLE'); setProgress(72); setCommandNote('Awaiting command'); }
   };
@@ -388,12 +462,14 @@ export function EchoMazeDashboard() {
     { view: 'overview' as View, icon: Gauge, label: 'Field overview' },
     { view: 'telemetry' as View, icon: Radio, label: 'Telemetry' },
     { view: 'analysis' as View, icon: Layers3, label: 'Spatial comparison' },
+    { view: 'operations' as View, icon: SlidersHorizontal, label: 'Field functions' },
     { view: 'report' as View, icon: FileCheck2, label: 'Inspection record' },
   ];
   const titles: Record<View, [string, string]> = {
     overview: ['Field overview', 'Live structural verification'],
     telemetry: ['Telemetry', 'Receiver frames and sensor integrity'],
     analysis: ['Spatial comparison', 'Baseline geometry against the current run'],
+    operations: ['Field functions', 'Bounded runtime modes and fail-safe observability'],
     report: ['Inspection record', 'Consolidated evidence for field review'],
   };
 
@@ -418,9 +494,10 @@ export function EchoMazeDashboard() {
             <div className={`run-chip ${state === 'VERIFYING' || state === 'STOPPED' ? 'review' : ''}`}><span className="live-dot" />{state === 'IDLE' ? 'Ready for command' : state === 'STOPPED' ? 'Run halted' : `${state} / ${runMetadata.id}`}</div>
           </div>
           <MissionStrip connection={connection} packetCount={packetCount} state={state} />
-          {view === 'overview' && <Overview state={state} progress={progress} connected={connection === 'connected'} liveTelemetry={liveTelemetry} packetCount={packetCount} onCommand={command} onView={setView} ghostOn={ghostOn} onToggleGhost={() => setGhostOn((value) => !value)} frame={frame} liveMap={liveMap} />}
+          {view === 'overview' && <Overview state={state} progress={progress} connected={connection === 'connected'} liveTelemetry={liveTelemetry} packetCount={packetCount} onCommand={command} onView={setView} ghostOn={ghostOn} onToggleGhost={() => setGhostOn((value) => !value)} frame={frame} liveMap={liveMap} telemetryHistory={telemetryHistory} />}
           {view === 'telemetry' && <TelemetryWorkspace connected={connection === 'connected'} liveTelemetry={liveTelemetry} packetCount={packetCount} frame={frame} liveMap={liveMap} />}
           {view === 'analysis' && <Analysis ghostOn={ghostOn} onToggleGhost={() => setGhostOn((value) => !value)} liveMap={liveMap} />}
+          {view === 'operations' && <OperationsWorkspace connection={connection} state={state} liveMap={liveMap} telemetryHistory={telemetryHistory} roverStatus={roverStatus} onCommand={command} />}
           {view === 'report' && <FinalReport metadata={runMetadata} scores={scores} onExport={() => setCommandNote('Report staged for export')} />}
         </main>
       </div>
