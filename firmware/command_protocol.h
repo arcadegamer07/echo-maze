@@ -8,6 +8,10 @@ enum class RoverCommand : uint8_t {
   Verify,
   RunRoute,
   Explore,
+  DriveStraight,
+  ScanOnly,
+  MotorDiagnostic,
+  FailsafeStatus,
   Stop,
   Reset,
 };

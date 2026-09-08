@@ -59,8 +59,10 @@ void MotorController::setOne(uint8_t pwmPin, uint8_t in1, uint8_t in2,
 void MotorController::setSpeeds(int16_t left, int16_t right) {
   // Direction pins are set before standby is released. This prevents a
   // transient direction glitch from reaching the motor outputs.
-  setOne(EchoPins::MotorPwmA, EchoPins::MotorAin1, EchoPins::MotorAin2, left);
-  setOne(EchoPins::MotorPwmB, EchoPins::MotorBin1, EchoPins::MotorBin2, right);
+  const int16_t electricalLeft = left * EchoPins::MotorADirectionSign;
+  const int16_t electricalRight = right * EchoPins::MotorBDirectionSign;
+  setOne(EchoPins::MotorPwmA, EchoPins::MotorAin1, EchoPins::MotorAin2, electricalLeft);
+  setOne(EchoPins::MotorPwmB, EchoPins::MotorBin1, EchoPins::MotorBin2, electricalRight);
   digitalWrite(EchoPins::MotorStandby, (left == 0 && right == 0) ? LOW : HIGH);
 }
 

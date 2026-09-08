@@ -22,6 +22,11 @@ without updating this file and reviewing the wiring first.
 AO1/AO2 connect to Motor 1. BO1/BO2 connect to Motor 2. Motor battery
 negative connects to the common ground.
 
+The assembled chassis uses inverted electrical polarity on both motor
+channels, so firmware logical `+speed` is calibrated as physical forward.
+That calibration is kept in `hardware_config.h` and applies consistently to
+manual commands, Explore, Learn/Verify routes, and diagnostics.
+
 ## I2C bus
 
 | Device pin | ESP32 GPIO |

@@ -4,10 +4,22 @@
 
 The ESP32 opens a WebSocket connection to `ws://<laptop-ip>:8765`. It sends
 one UTF-8 JSON object per WebSocket message at approximately 10 Hz. The laptop
-receiver also relays dashboard commands (`learn`, `verify`, `explore`, `stop`, `reset`,
-`run_route`) to the connected ESP32 and broadcasts accepted telemetry to
+receiver also relays dashboard commands (`learn`, `verify`, `explore`,
+`drive_straight`, `scan_only`, `motor_diagnostic`, `stop`, `reset`,
+`failsafe_status`, `run_route`) to the connected ESP32 and broadcasts accepted telemetry to
 dashboard clients. It replies with a small acknowledgement after accepting or
-rejecting a frame.
+rejecting a frame. Motion commands are bounded; motor diagnostics additionally
+require an explicit `wheels_lifted: true` payload.
+
+The firmware may also send an out-of-band `event: "rover_status"` frame. It is
+not telemetry and is never appended to run logs. It carries a machine-readable
+`state`, `reason`, optional `cause`, `runtime_mode`, and `recommended_action`
+so the dashboard can explain a safe stop to an operator.
+
+While a bounded field function is active, the dashboard sends the non-motion
+`failsafe_status` command about every 750 ms. This is the operator heartbeat
+required by the firmware's two-second WebSocket loss watchdog; it does not
+drive motors or change the selected runtime mode.
 
 Use `mode: "test"` with `source: "fixture"` for connectivity checks before
 all sensors are wired. Test packets are never used to build a baseline, map,

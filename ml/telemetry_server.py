@@ -20,6 +20,10 @@ from websockets.exceptions import ConnectionClosed
 
 SCHEMA_PATH = Path(__file__).parent / "schemas" / "telemetry.schema.json"
 CONNECTED_CLIENTS: set[ServerConnection] = set()
+COMMANDS = {
+    "learn", "verify", "stop", "reset", "run_route", "explore",
+    "drive_straight", "scan_only", "motor_diagnostic", "failsafe_status",
+}
 
 
 def utc_now() -> str:
@@ -34,6 +38,21 @@ def schema_validator() -> Draft202012Validator:
 def log_path(output_dir: Path, run_id: str) -> Path:
     safe_run_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in run_id)
     return output_dir / f"{safe_run_id}.jsonl"
+
+
+async def relay_to_peers(sender: ServerConnection, packet: dict[str, Any]) -> int:
+    """Forward a control/status frame without treating it as telemetry."""
+    delivered = 0
+    encoded = json.dumps(packet, separators=(",", ":"))
+    for client in list(CONNECTED_CLIENTS):
+        if client is sender:
+            continue
+        try:
+            await client.send(encoded)
+            delivered += 1
+        except ConnectionClosed:
+            CONNECTED_CLIENTS.discard(client)
+    return delivered
 
 
 async def handle_connection(
@@ -59,20 +78,24 @@ async def handle_connection(
             # telemetry packets. Relay them to the ESP32 client(s).
             command = packet.get("cmd") if isinstance(packet, dict) else None
             if isinstance(command, str):
-                if command not in {"learn", "verify", "stop", "reset", "run_route", "explore"}:
+                if command not in COMMANDS:
                     await websocket.send(json.dumps({"ok": False, "error": "unknown command"}))
                     continue
-                delivered = 0
-                for client in list(CONNECTED_CLIENTS):
-                    if client is websocket:
-                        continue
-                    try:
-                        await client.send(json.dumps(packet, separators=(",", ":")))
-                        delivered += 1
-                    except ConnectionClosed:
-                        CONNECTED_CLIENTS.discard(client)
+                delivered = await relay_to_peers(websocket, packet)
                 await websocket.send(json.dumps({"ok": delivered > 0, "cmd": command, "delivered_to": delivered}))
                 print(f"Relayed command {command!r} from {sender_ip} to {delivered} client(s)")
+                continue
+
+            # Firmware health frames intentionally sit outside the telemetry
+            # contract. Relay them to the dashboard so it can explain why a
+            # run stopped and what an operator should inspect; never append
+            # them to a run's immutable sensor log.
+            if packet.get("event") == "rover_status":
+                delivered = await relay_to_peers(websocket, packet)
+                print(
+                    f"Rover status {packet.get('state', 'UNKNOWN')!r} "
+                    f"({packet.get('reason', 'no reason')}) -> {delivered} client(s)"
+                )
                 continue
 
             # ESP32 acknowledgements are informational frames, not contract

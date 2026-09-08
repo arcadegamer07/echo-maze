@@ -64,3 +64,20 @@ class TelemetryServerTests(unittest.TestCase):
             telemetry_server.CONNECTED_CLIENTS.discard(esp32)
         self.assertEqual(dashboard.sent, [{"ok": True, "cmd": "stop", "delivered_to": 1}])
         self.assertEqual(esp32.sent, [{"cmd": "stop", "source": "dashboard"}])
+
+    def test_rover_status_is_relayed_without_creating_sensor_log(self):
+        esp32 = FakeWebSocket([json.dumps({
+            "event": "rover_status",
+            "state": "stopped",
+            "reason": "ultrasonic_obstacle",
+            "recommended_action": "clear path",
+        })])
+        dashboard = FakeWebSocket([])
+        telemetry_server.CONNECTED_CLIENTS.add(dashboard)
+        with tempfile.TemporaryDirectory() as directory:
+            try:
+                asyncio.run(handle_connection(esp32, Path(directory), schema_validator()))
+            finally:
+                telemetry_server.CONNECTED_CLIENTS.discard(dashboard)
+            self.assertEqual(list(Path(directory).iterdir()), [])
+        self.assertEqual(dashboard.sent[0]["event"], "rover_status")

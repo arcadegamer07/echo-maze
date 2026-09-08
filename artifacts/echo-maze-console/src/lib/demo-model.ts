@@ -4,7 +4,15 @@ export type Telemetry = {
   ultrasonic: number; ir: number; temperature: number;
 };
 export type Pose = { x: number; y: number; heading: number; confidence: number };
-export type ScoreSet = { geometry: number; tilt: number; vibration: number; thermal: number; total: number };
+export type ScoreSet = {
+  geometry: number;
+  tilt: number;
+  vibration: number;
+  thermal: number;
+  total: number;
+  source?: 'fixture' | 'live-evidence' | 'ml';
+  note?: string;
+};
 export type DiffZone = { id: string; label: string; severity: string; delta: string };
 export type RunMetadata = { id: string; mode: string; startedAt: string; route: string; points: number; confidence: number };
 export type PointCloudPoint = { x: number; y: number; intensity: number; age: number };
@@ -15,7 +23,7 @@ export const telemetry: Telemetry = {
   gyro: 'Unavailable', ultrasonic: 42.8, ir: 318, temperature: 24.6,
 };
 export const pose: Pose = { x: 2.84, y: 1.42, heading: 18, confidence: 94.7 };
-export const scores: ScoreSet = { geometry: 22, tilt: 0, vibration: 0, thermal: 9, total: 22 };
+export const scores: ScoreSet = { geometry: 22, tilt: 0, vibration: 0, thermal: 9, total: 22, source: 'fixture', note: 'Deterministic review fixture' };
 export const diffZones: DiffZone[] = [
   { id: 'ZONE B3', label: 'east wall displacement', severity: 'HIGH', delta: '+12.4 cm' },
   { id: 'ZONE C1', label: 'floor plane tilt', severity: 'MEDIUM', delta: '+2.8°' },
