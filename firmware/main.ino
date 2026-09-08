@@ -52,12 +52,15 @@ constexpr uint32_t kExploreDefaultDurationMs = 10000UL;
 constexpr uint32_t kExploreCheckPeriodMs = 120UL;
 constexpr uint32_t kExploreReverseMs = 400UL;
 constexpr uint32_t kExploreTurnMs = 560UL;
-// TT gear motors often spin unloaded at ~25% duty but cannot break static
-// friction once the rover is on the floor. These values stay moderate while
-// providing enough starting torque from the 5 V motor supply.
-constexpr int16_t kExploreForwardSpeed = 200;
-constexpr int16_t kExploreReverseSpeed = -185;
-constexpr int16_t kExploreTurnSpeed = 190;
+// The assembled rover needs a high initial duty cycle to break floor friction.
+// 230/255 is intentionally below full power, preserving a little headroom for
+// uneven battery voltage while providing materially more torque than 200.
+constexpr int16_t kDriveForwardSpeed = 230;
+constexpr int16_t kDriveReverseSpeed = -220;
+constexpr int16_t kDriveTurnSpeed = 220;
+constexpr int16_t kExploreForwardSpeed = kDriveForwardSpeed;
+constexpr int16_t kExploreReverseSpeed = kDriveReverseSpeed;
+constexpr int16_t kExploreTurnSpeed = kDriveTurnSpeed;
 constexpr float kExploreObstacleCm = 22.0f;
 constexpr uint8_t kExploreInvalidReadLimit = 3;
 
@@ -68,11 +71,11 @@ struct RouteStep { int16_t left; int16_t right; uint32_t durationMs; };
 // increasing the approximate travel distance of the earlier low-PWM route.
 const RouteStep kRoute[] = {
     {0, 0, 700},
-    {200, 200, 600}, {0, 0, 450}, {190, -190, 330}, {0, 0, 450},
-    {200, 200, 600}, {0, 0, 450}, {190, -190, 330}, {0, 0, 450},
-    {200, 200, 600}, {0, 0, 450}, {190, 190, 330}, {0, 0, 450},
-    {200, 200, 600}, {0, 0, 450}, {190, 190, 330}, {0, 0, 450},
-    {-185, -185, 420}, {0, 0, 600}, {190, -190, 330}, {0, 0, 650},
+    {kDriveForwardSpeed, kDriveForwardSpeed, 600}, {0, 0, 450}, {kDriveTurnSpeed, -kDriveTurnSpeed, 330}, {0, 0, 450},
+    {kDriveForwardSpeed, kDriveForwardSpeed, 600}, {0, 0, 450}, {kDriveTurnSpeed, -kDriveTurnSpeed, 330}, {0, 0, 450},
+    {kDriveForwardSpeed, kDriveForwardSpeed, 600}, {0, 0, 450}, {kDriveTurnSpeed, kDriveTurnSpeed, 330}, {0, 0, 450},
+    {kDriveForwardSpeed, kDriveForwardSpeed, 600}, {0, 0, 450}, {kDriveTurnSpeed, kDriveTurnSpeed, 330}, {0, 0, 450},
+    {kDriveReverseSpeed, kDriveReverseSpeed, 420}, {0, 0, 600}, {kDriveTurnSpeed, -kDriveTurnSpeed, 330}, {0, 0, 650},
 };
 constexpr uint8_t kRouteLength = sizeof(kRoute) / sizeof(kRoute[0]);
 
