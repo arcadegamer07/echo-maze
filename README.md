@@ -27,6 +27,26 @@ The current hardware-independent firmware boundaries are documented in
 `firmware/INTEGRATION_PLAN.md`; the ML foundation and its learn/verify commands
 are documented in `ml/README.md`.
 
+## Standalone rover power
+
+The laptop USB cable is only needed for flashing and serial diagnostics. For
+field operation, connect a power bank's regulated 5 V USB output to the ESP32
+USB port, then unplug the laptop. Keep the TB6612 motor supply on its own
+properly rated motor battery/regulated rail; do not feed motors from the
+ESP32 3V3 pin or directly from an unverified USB rail. Tie the power-bank
+ground, motor-supply ground, servo-supply ground, and ESP32/TB6612 GND
+together. The firmware boots, joins the configured hotspot, and reconnects to
+the receiver without a USB data connection.
+
+Recommended power-on order:
+
+1. Start the laptop receiver and enable the configured hotspot.
+2. Keep the motor supply switched off while powering the ESP32 from the power
+   bank; confirm the dashboard/receiver link.
+3. Turn on the motor supply only after the rover reports `WebSocket CONNECTED`.
+4. Use the dashboard's non-motion status check, then run a supervised field
+   function. Keep the USB cable available for reflashing or serial logs.
+
 ## CSE-2: perception pipeline
 
 The perception layer is hardware-independent and can be exercised from a

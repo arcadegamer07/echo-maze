@@ -66,3 +66,18 @@ that node to GND (about 3.3 V at the GPIO when ECHO is high).
 - Do not connect the 3.7V motor battery directly to OLED/IMU/DHT/IR VCC.
 - Do not plug or unplug powered sensor wires. Verify the physical breadboard
   holes against a clear wiring photo before applying battery power.
+
+## Power-bank field operation
+
+- Use the power bank's regulated 5 V USB output on the ESP32 USB connector.
+  This replaces the laptop's USB power/data connection for untethered runs;
+  no firmware change is required.
+- Keep motor power on the TB6612 `VM` rail from a motor battery or a regulator
+  rated for the motors' startup current. Do not power the motors from the
+  ESP32 3V3 rail, and do not assume a USB power bank can supply the motor
+  surge current.
+- Keep a common ground between ESP32, TB6612, motor supply, servo supply, and
+  sensors. Never apply the power bank's 5 V to a 3V3-only sensor pin.
+- Start the receiver/hotspot before powering the rover. The firmware connects
+  to the configured Wi-Fi and retries the WebSocket automatically; wait for
+  `WebSocket CONNECTED` before enabling a motion command.
